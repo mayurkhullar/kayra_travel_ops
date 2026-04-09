@@ -22,48 +22,33 @@ class TravellerAccountService {
   }
 
   Future<TravellerGroupContext> resolveGroupByCode(String routeGroupCode) async {
-    final code = routeGroupCode.trim();
-    if (code.isEmpty) {
+    final groupCode = routeGroupCode.trim();
+    if (groupCode.isEmpty) {
       throw const TravellerAccountException('Group link not found.');
     }
 
-    final normalizedPath = '/g/$code';
-
     try {
-      Map<String, dynamic>? groupData;
-      String? groupId;
-
-      final byLinkPath = await _groups
-          .where('travellerLinkPath', isEqualTo: normalizedPath)
+      print('Group code: $groupCode');
+      final query = await _groups
+          .where('travellerLinkPath', isEqualTo: groupCode)
+          .where('travellerLinkEnabled', isEqualTo: true)
           .limit(1)
           .get();
+      print('Docs found: ${query.docs.length}');
 
-      if (byLinkPath.docs.isNotEmpty) {
-        groupData = byLinkPath.docs.first.data();
-        groupId = byLinkPath.docs.first.id;
-      } else {
-        final byDocId = await _groups.doc(code).get();
-        if (byDocId.exists && byDocId.data() != null) {
-          groupData = byDocId.data();
-          groupId = byDocId.id;
-        }
-      }
-
-      if (groupData == null || groupId == null) {
+      if (query.docs.isEmpty) {
         throw const TravellerAccountException('Group link not found.');
       }
+
+      final groupDoc = query.docs.first;
+      final groupData = groupDoc.data();
+      final groupId = groupDoc.id;
 
       final context = TravellerGroupContext.fromFirestore(
         groupId,
         groupData,
-        groupCode: code,
+        groupCode: groupCode,
       );
-
-      if (!context.travellerLinkEnabled) {
-        throw const TravellerAccountException(
-          'This traveller link is disabled. Please contact support.',
-        );
-      }
 
       return context;
     } on TravellerAccountException {
