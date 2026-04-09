@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'screens/home/bootstrap_home_screen.dart';
+import 'screens/traveller/traveller_link_bootstrap_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +38,8 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final travellerGroupCode = _extractTravellerGroupCode(Uri.base);
+
     return AnimatedBuilder(
       animation: _authProvider,
       builder: (context, _) {
@@ -51,9 +54,22 @@ class _MyAppState extends State<MyApp> {
             ),
             useMaterial3: true,
           ),
-          home: BootstrapHomeScreen(authProvider: _authProvider),
+          home: travellerGroupCode != null
+              ? TravellerLinkBootstrapScreen(groupCode: travellerGroupCode)
+              : BootstrapHomeScreen(authProvider: _authProvider),
         );
       },
     );
+  }
+
+  String? _extractTravellerGroupCode(Uri uri) {
+    final segments = uri.pathSegments;
+    if (segments.length >= 2 && segments.first == 'g') {
+      final code = segments[1].trim();
+      if (code.isNotEmpty) {
+        return code;
+      }
+    }
+    return null;
   }
 }

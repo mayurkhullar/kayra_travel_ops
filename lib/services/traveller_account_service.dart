@@ -1,0 +1,192 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../models/traveller_account.dart';
+import '../models/traveller_group_context.dart';
+
+class TravellerAccountService {
+  TravellerAccountService({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> get _groups =>
+      _firestore.collection('groups');
+  CollectionReference<Map<String, dynamic>> get _travellerAccounts =>
+      _firestore.collection('traveller_accounts');
+
+  String normalizePhone(String input) => input.replaceAll(RegExp(r'\D'), '');
+
+  String buildTravellerAuthEmail(String rawPhone) {
+    final normalized = normalizePhone(rawPhone);
+    return 'traveller.$normalized@traveller.kayra.app';
+  }
+
+  Future<TravellerGroupContext> resolveGroupByCode(String routeGroupCode) async {
+    final code = routeGroupCode.trim();
+    if (code.isEmpty) {
+      throw const TravellerAccountException('Group link not found.');
+    }
+
+    final normalizedPath = '/g/$code';
+
+    try {
+      Map<String, dynamic>? groupData;
+      String? groupId;
+
+      final byLinkPath = await _groups
+          .where('travellerLinkPath', isEqualTo: normalizedPath)
+          .limit(1)
+          .get();
+
+      if (byLinkPath.docs.isNotEmpty) {
+        groupData = byLinkPath.docs.first.data();
+        groupId = byLinkPath.docs.first.id;
+      } else {
+        final byDocId = await _groups.doc(code).get();
+        if (byDocId.exists && byDocId.data() != null) {
+          groupData = byDocId.data();
+          groupId = byDocId.id;
+        }
+      }
+
+      if (groupData == null || groupId == null) {
+        throw const TravellerAccountException('Group link not found.');
+      }
+
+      final context = TravellerGroupContext.fromFirestore(
+        groupId,
+        groupData,
+        groupCode: code,
+      );
+
+      if (!context.travellerLinkEnabled) {
+        throw const TravellerAccountException(
+          'This traveller link is disabled. Please contact support.',
+        );
+      }
+
+      return context;
+    } on TravellerAccountException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw TravellerAccountException(_mapFirestoreError(error));
+    } catch (_) {
+      throw const TravellerAccountException(
+        'Unable to open this traveller link right now.',
+      );
+    }
+  }
+
+  Future<TravellerAccount> getTravellerByPhoneForGroup({
+    required String phone,
+    required String groupId,
+  }) async {
+    final candidates = <String>{phone.trim()};
+    final normalized = normalizePhone(phone);
+    if (normalized.isNotEmpty) {
+      candidates.add(normalized);
+      if (!normalized.startsWith('1')) {
+        candidates.add('1$normalized');
+      }
+      candidates.add('+$normalized');
+      if (!normalized.startsWith('1')) {
+        candidates.add('+1$normalized');
+      }
+    }
+
+    try {
+      QueryDocumentSnapshot<Map<String, dynamic>>? found;
+      for (final candidate in candidates.where((value) => value.isNotEmpty)) {
+        final query = await _travellerAccounts
+            .where('phone', isEqualTo: candidate)
+            .limit(1)
+            .get();
+        if (query.docs.isNotEmpty) {
+          found = query.docs.first;
+          break;
+        }
+      }
+
+      if (found == null) {
+        throw const TravellerAccountException('Mobile number not found.');
+      }
+
+      final account = TravellerAccount.fromFirestore(found.id, found.data());
+
+      if (!account.isActive) {
+        throw const TravellerAccountException(
+          'This traveller account is inactive. Please contact support.',
+        );
+      }
+
+      if (!account.groupIds.contains(groupId)) {
+        throw const TravellerAccountException(
+          'This traveller account is not linked to this group.',
+        );
+      }
+
+      return account;
+    } on TravellerAccountException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw TravellerAccountException(_mapFirestoreError(error));
+    } catch (_) {
+      throw const TravellerAccountException(
+        'Unable to load traveller account. Please try again.',
+      );
+    }
+  }
+
+  Future<TravellerAccount?> getTravellerByAuthUid(String uid) async {
+    try {
+      final byUid =
+          await _travellerAccounts.where('authUid', isEqualTo: uid).limit(1).get();
+      if (byUid.docs.isNotEmpty) {
+        final doc = byUid.docs.first;
+        return TravellerAccount.fromFirestore(doc.id, doc.data());
+      }
+      return null;
+    } on FirebaseException catch (error) {
+      throw TravellerAccountException(_mapFirestoreError(error));
+    }
+  }
+
+  Future<void> attachAuthToTravellerAccount({
+    required String travellerId,
+    required String authUid,
+    required String authEmail,
+  }) async {
+    try {
+      await _travellerAccounts.doc(travellerId).set(
+        {
+          'authUid': authUid,
+          'authEmail': authEmail,
+          'passwordInitializedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (error) {
+      throw TravellerAccountException(_mapFirestoreError(error));
+    }
+  }
+
+  String _mapFirestoreError(FirebaseException error) {
+    switch (error.code) {
+      case 'permission-denied':
+        return 'Permission denied while loading traveller access.';
+      case 'unavailable':
+        return 'Network error while loading traveller data.';
+      default:
+        return error.message ?? 'Traveller data request failed.';
+    }
+  }
+}
+
+class TravellerAccountException implements Exception {
+  const TravellerAccountException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
