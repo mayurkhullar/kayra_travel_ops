@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /traveller_accounts/{id} {
+      allow read: if request.auth != null
+        && resource.data.authUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /groups/{groupId} {
+      allow read: if request.auth != null
+        && exists(
+          /databases/$(database)/documents/traveller_accounts/$(request.auth.uid)
+        )
+        && groupId in get(
+          /databases/$(database)/documents/traveller_accounts/$(request.auth.uid)
+        ).data.groupIds;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
