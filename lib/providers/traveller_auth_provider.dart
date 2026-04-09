@@ -32,6 +32,7 @@ class TravellerAuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> initializeFromGroupLink(String routeGroupCode) async {
+    print('Traveller login: route/group code received code=${routeGroupCode.trim()}');
     _setState(isLoading: true, clearError: true);
 
     try {
@@ -139,10 +140,12 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
+      print('Traveller login attempt starting mobile=${mobile.trim()}');
       final account = await _accountService.findByPhone(mobile);
       if (account == null) {
         throw const TravellerAccountException('Mobile number not found.');
       }
+      print('Traveller login: group access validation starting groupId=${group.id}');
       _accountService.validateAccountForGroup(account: account, groupId: group.id);
 
       if (!account.isInitialized) {
@@ -163,6 +166,7 @@ class TravellerAuthProvider extends ChangeNotifier {
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
+      print('Traveller login: Firebase Auth login success uid=$uid');
 
       if (account.authUid != uid) {
         throw const TravellerAccountException(
@@ -170,12 +174,16 @@ class TravellerAuthProvider extends ChangeNotifier {
         );
       }
 
+      print('Traveller account read starting uid=$uid');
       final refreshed = await _accountService.getTravellerByAuthUid(uid);
       if (refreshed == null) {
+        print('Traveller account read: failure uid=$uid reason=not_found');
         throw const TravellerAccountException(
           'Traveller account mapping is missing for this login.',
         );
       }
+      print('Traveller account read: success uid=$uid');
+      print('Traveller login: group access validation starting groupId=${group.id}');
       _accountService.validateAccountForGroup(account: refreshed, groupId: group.id);
 
       _setState(
@@ -216,14 +224,17 @@ class TravellerAuthProvider extends ChangeNotifier {
     }
 
     try {
+      print('Traveller account read starting uid=${firebaseUser.uid}');
       final account = await _accountService.getTravellerByAuthUid(firebaseUser.uid);
       if (account == null) {
+        print('Traveller account read: failure uid=${firebaseUser.uid} reason=not_found');
         _setState(
           currentTravellerAccount: null,
           updateAccount: true,
         );
         return;
       }
+      print('Traveller account read: success uid=${firebaseUser.uid}');
 
       final group = _currentGroup;
       if (group != null && !account.groupIds.contains(group.id)) {

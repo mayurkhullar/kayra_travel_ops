@@ -23,18 +23,21 @@ class TravellerAccountService {
 
   Future<TravellerGroupContext> resolveGroupByCode(String routeGroupCode) async {
     final groupCode = routeGroupCode.trim();
+    print('Traveller login: route/group code received code=$groupCode');
     if (groupCode.isEmpty) {
       throw const TravellerAccountException('Group link not found.');
     }
 
     try {
-      print('Group code: $groupCode');
+      print('Traveller login: group query starting code=$groupCode');
       final query = await _groups
           .where('travellerLinkPath', isEqualTo: groupCode)
           .where('travellerLinkEnabled', isEqualTo: true)
           .limit(1)
           .get();
-      print('Docs found: ${query.docs.length}');
+      print(
+        'Traveller login: group query success code=$groupCode docs=${query.docs.length}',
+      );
 
       if (query.docs.isEmpty) {
         throw const TravellerAccountException('Group link not found.');
@@ -53,9 +56,21 @@ class TravellerAccountService {
       return context;
     } on TravellerAccountException {
       rethrow;
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, stackTrace) {
+      print('Traveller login: group query failure code=$groupCode');
+      _printFirestoreError(
+        stage: 'Group query',
+        error: error,
+        stackTrace: stackTrace,
+      );
       throw TravellerAccountException(_mapFirestoreError(error));
-    } catch (_) {
+    } catch (error, stackTrace) {
+      print('Traveller login: group query failure code=$groupCode');
+      _printGenericError(
+        stage: 'Group query',
+        error: error,
+        stackTrace: stackTrace,
+      );
       throw const TravellerAccountException(
         'Unable to open this traveller link right now.',
       );
@@ -91,16 +106,25 @@ class TravellerAccountService {
     }
 
     try {
+      print('Traveller account read: starting phone=$normalizedPhone');
       final query = await _travellerAccounts
           .where('phone', isEqualTo: normalizedPhone)
           .limit(1)
           .get();
       if (query.docs.isEmpty) {
+        print('Traveller account read: success phone=$normalizedPhone found=false');
         return null;
       }
       final doc = query.docs.first;
+      print('Traveller account read: success phone=$normalizedPhone found=true');
       return TravellerAccount.fromFirestore(doc.id, doc.data());
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, stackTrace) {
+      print('Traveller account read: failure phone=$normalizedPhone');
+      _printFirestoreError(
+        stage: 'Traveller account read by phone',
+        error: error,
+        stackTrace: stackTrace,
+      );
       throw TravellerAccountException(_mapFirestoreError(error));
     }
   }
@@ -124,16 +148,47 @@ class TravellerAccountService {
 
   Future<TravellerAccount?> getTravellerByAuthUid(String uid) async {
     try {
+      print('Traveller account read: starting uid=$uid');
       final byUid =
           await _travellerAccounts.where('authUid', isEqualTo: uid).limit(1).get();
       if (byUid.docs.isNotEmpty) {
         final doc = byUid.docs.first;
+        print('Traveller account read: success uid=$uid found=true');
         return TravellerAccount.fromFirestore(doc.id, doc.data());
       }
+      print('Traveller account read: success uid=$uid found=false');
       return null;
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, stackTrace) {
+      print('Traveller account read: failure uid=$uid');
+      _printFirestoreError(
+        stage: 'Traveller account read by auth uid',
+        error: error,
+        stackTrace: stackTrace,
+      );
       throw TravellerAccountException(_mapFirestoreError(error));
     }
+  }
+
+  void _printFirestoreError({
+    required String stage,
+    required FirebaseException error,
+    required StackTrace stackTrace,
+  }) {
+    final firstStackLine = stackTrace.toString().split('\n').first;
+    print('$stage: exception type=${error.runtimeType}');
+    print('$stage: message=${error.message ?? error.code}');
+    print('$stage: stackTraceFirstLine=$firstStackLine');
+  }
+
+  void _printGenericError({
+    required String stage,
+    required Object error,
+    required StackTrace stackTrace,
+  }) {
+    final firstStackLine = stackTrace.toString().split('\n').first;
+    print('$stage: exception type=${error.runtimeType}');
+    print('$stage: message=$error');
+    print('$stage: stackTraceFirstLine=$firstStackLine');
   }
 
   Future<void> attachAuthToTravellerAccount({
