@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/traveller_account.dart';
 import '../models/traveller_group_context.dart';
+import 'traveller_identity_mapper.dart';
 
 class TravellerAccountLookupResult {
   const TravellerAccountLookupResult({
@@ -78,13 +79,8 @@ class TravellerAccountService {
 
   String normalizePhone(String input) => input.replaceAll(RegExp(r'\D'), '');
 
-  String buildTravellerAuthEmail(String rawPhone) {
-    final normalized = normalizePhone(rawPhone);
-    if (normalized.isEmpty) {
-      throw const TravellerAccountException('Enter a valid mobile number.');
-    }
-    return '$normalized@traveller.kayra.local';
-  }
+  String buildTravellerAuthEmail(String rawPhone) =>
+      mapTravellerPhoneToAuthEmail(rawPhone);
 
   Future<TravellerAccountLookupResult?> findByPhone(String phone) async {
     final rawPhone = phone.trim();
@@ -183,6 +179,7 @@ class TravellerAccountService {
     };
 
     try {
+      print('First-time setup stage: canonical traveller doc write started uid=$uid');
       final batch = _firestore.batch();
       final canonicalRef = _travellerAccounts.doc(uid);
       batch.set(canonicalRef, canonicalData, SetOptions(merge: true));

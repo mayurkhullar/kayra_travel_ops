@@ -46,6 +46,19 @@ class TravellerAuthService {
     }
   }
 
+  Future<bool> authAccountExistsForEmail(String email) async {
+    try {
+      final methods = await _firebaseAuth.fetchSignInMethodsForEmail(email);
+      return methods.isNotEmpty;
+    } on FirebaseAuthException catch (error) {
+      throw TravellerAuthException(_mapError(error));
+    } catch (_) {
+      throw const TravellerAuthException(
+        'Unable to verify traveller account right now. Please try again.',
+      );
+    }
+  }
+
   Future<void> signOut() async {
     try {
       await _firebaseAuth.signOut();
@@ -59,10 +72,11 @@ class TravellerAuthService {
   String _mapError(FirebaseAuthException error) {
     switch (error.code) {
       case 'wrong-password':
-      case 'invalid-credential':
         return 'Wrong password. Please try again.';
+      case 'invalid-credential':
+        return 'Invalid credentials. Please check your mobile number and password.';
       case 'user-not-found':
-        return 'Mobile number not found for traveler login.';
+        return 'Mapped traveller auth account not found.';
       case 'email-already-in-use':
         return 'This traveller account has already been initialized.';
       case 'weak-password':

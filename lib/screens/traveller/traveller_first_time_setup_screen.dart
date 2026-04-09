@@ -38,6 +38,7 @@ class _TravellerFirstTimeSetupScreenState
     await widget.authProvider.firstTimeSetup(
       mobile: _mobileController.text,
       password: _passwordController.text,
+      confirmPassword: _confirmPasswordController.text,
     );
 
     if (!mounted) {
