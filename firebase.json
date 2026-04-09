@@ -1,0 +1,36 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "kayra-holiday-maps-travel-ops",
+          "appId": "1:413512796957:android:92bb6ccac397400275eff4",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "kayra-holiday-maps-travel-ops",
+          "configurations": {
+            "android": "1:413512796957:android:92bb6ccac397400275eff4",
+            "web": "1:413512796957:web:c56781fb413c615675eff4"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

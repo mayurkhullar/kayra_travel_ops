@@ -20,6 +20,11 @@ class TravellerAuthService {
         password: password,
       );
     } on FirebaseAuthException catch (error) {
+      if (error.code == 'email-already-in-use') {
+        throw const TravellerAuthException(
+          'Traveller already initialized. Please log in.',
+        );
+      }
       throw TravellerAuthException(_mapError(error));
     } catch (_) {
       throw const TravellerAuthException(
@@ -48,9 +53,17 @@ class TravellerAuthService {
 
   Future<bool> authAccountExistsForEmail(String email) async {
     try {
-      final methods = await _firebaseAuth.fetchSignInMethodsForEmail(email);
-      return methods.isNotEmpty;
+      final probeCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+        email: email,
+        password:
+            'Tmp#${DateTime.now().microsecondsSinceEpoch}aA!',
+      );
+      await probeCredential.user?.delete();
+      return false;
     } on FirebaseAuthException catch (error) {
+      if (error.code == 'email-already-in-use') {
+        return true;
+      }
       throw TravellerAuthException(_mapError(error));
     } catch (_) {
       throw const TravellerAuthException(

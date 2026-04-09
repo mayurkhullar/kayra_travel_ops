@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "413512796957",
+    "project_id": "kayra-holiday-maps-travel-ops",
+    "storage_bucket": "kayra-holiday-maps-travel-ops.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:413512796957:android:92bb6ccac397400275eff4",
+        "android_client_info": {
+          "package_name": "com.kayraholidaymaps.ops"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAftnRZR3Ilv_x1N2QSnqoARNqpfaUTuz0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
