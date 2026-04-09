@@ -17,6 +17,13 @@ class AuthProvider extends ChangeNotifier {
 
   StreamSubscription<User?>? _authSubscription;
 
+  static const Set<String> _supportedRoles = {
+    'super_admin',
+    'manager',
+    'team_leader',
+    'agent',
+  };
+
   AppUser? _currentUser;
   bool _isLoading = true;
   String? _errorMessage;
@@ -129,10 +136,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _bootstrapUser(User firebaseUser) async {
-    final profile = await _userService.fetchOrCreateUser(
-      uid: firebaseUser.uid,
-      email: firebaseUser.email ?? '',
-    );
+    final profile = await _userService.fetchUserProfile(uid: firebaseUser.uid);
+
+    if (!profile.isActive) {
+      await _authService.signOut();
+      throw const UserException(
+        'Your account is inactive. Please contact your administrator.',
+      );
+    }
+
+    if (!_supportedRoles.contains(profile.role)) {
+      await _authService.signOut();
+      throw UserException('Unsupported role "${profile.role}" for this app.');
+    }
 
     _setState(
       isLoading: false,

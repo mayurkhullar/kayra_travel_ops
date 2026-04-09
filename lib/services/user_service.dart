@@ -11,27 +11,18 @@ class UserService {
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
 
-  Future<AppUser> fetchOrCreateUser({
-    required String uid,
-    required String email,
-  }) async {
+  Future<AppUser> fetchUserProfile({required String uid}) async {
     try {
       final existing = await _fetchByUidOrMappedId(uid);
-      if (existing != null) {
-        return existing;
+      if (existing == null) {
+        throw const UserException(
+          'Your user profile is missing. Please contact an administrator.',
+        );
       }
 
-      final created = AppUser(
-        id: uid,
-        email: email,
-        role: 'agent',
-        isActive: true,
-        createdAt: DateTime.now(),
-      );
-
-      await _usersCollection.doc(uid).set(created.toMap(), SetOptions(merge: true));
-
-      return created;
+      return existing;
+    } on UserException {
+      rethrow;
     } on FirebaseException catch (error) {
       throw UserException(_mapFirestoreError(error));
     } catch (_) {
@@ -52,7 +43,8 @@ class UserService {
       return AppUser.fromFirestore(payload);
     }
 
-    final byMappedId = await _usersCollection.where('id', isEqualTo: uid).limit(1).get();
+    final byMappedId =
+        await _usersCollection.where('id', isEqualTo: uid).limit(1).get();
     if (byMappedId.docs.isNotEmpty) {
       return AppUser.fromFirestore(byMappedId.docs.first.data());
     }
