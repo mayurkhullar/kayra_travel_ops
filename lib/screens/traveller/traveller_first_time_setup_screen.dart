@@ -46,7 +46,7 @@ class _TravellerFirstTimeSetupScreenState
     }
 
     if (widget.authProvider.isAuthenticated) {
-      print('Traveller login: final navigation starting destination=previous_screen');
+      print('First-time setup stage: navigation started destination=previous_screen');
       Navigator.of(context).pop();
     }
   }

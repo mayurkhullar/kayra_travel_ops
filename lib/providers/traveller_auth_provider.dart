@@ -97,16 +97,10 @@ class TravellerAuthProvider extends ChangeNotifier {
         stage: 'First-time setup stage',
       );
 
-      final authEmail = mapTravellerPhoneToAuthEmail(account.phone ?? mobile);
-      print('First-time setup stage: mapped auth email generated email=$authEmail');
-
-      final authAlreadyExists =
-          await _authService.authAccountExistsForEmail(authEmail);
-      if (authAlreadyExists || account.isInitialized) {
-        throw const TravellerAccountException(
-          'This traveller account is already initialized. Please use existing login.',
-        );
-      }
+      final authEmail = _accountService.buildTravellerAuthEmail(
+        account.phone ?? mobile,
+      );
+      print('First-time setup stage: auth email generated email=$authEmail');
 
       print('First-time setup stage: Firebase Auth create user started');
 
@@ -121,11 +115,29 @@ class TravellerAuthProvider extends ChangeNotifier {
       }
       print('First-time setup stage: Firebase Auth create user success uid=$uid');
 
-      await _accountService.upsertCanonicalTravellerAccount(
-        source: accountLookup,
-        uid: uid,
-        authEmail: authEmail,
-      );
+      try {
+        await _accountService.upsertCanonicalTravellerAccount(
+          source: accountLookup,
+          uid: uid,
+          authEmail: authEmail,
+        );
+      } on TravellerAccountException catch (error, stackTrace) {
+        print(
+          'First-time setup stage: canonical traveller doc write failed message=${error.message}',
+        );
+        print('First-time setup stage: stack $stackTrace');
+        try {
+          await credential.user?.delete();
+        } catch (deleteError, deleteStackTrace) {
+          print(
+            'First-time setup stage: rollback delete auth user failed message=$deleteError',
+          );
+          print('First-time setup stage: rollback stack $deleteStackTrace');
+        }
+        throw const TravellerAccountException(
+          'Account initialization failed while saving traveller profile. Please try again.',
+        );
+      }
 
       final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
@@ -139,7 +151,7 @@ class TravellerAuthProvider extends ChangeNotifier {
         stage: 'First-time setup stage',
       );
 
-      print('First-time setup stage: setup navigation started uid=$uid');
+      print('First-time setup stage: navigation started uid=$uid');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,

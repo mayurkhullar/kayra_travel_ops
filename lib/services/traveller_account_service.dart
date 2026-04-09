@@ -166,14 +166,20 @@ class TravellerAccountService {
     required String authEmail,
   }) async {
     final sourceData = Map<String, dynamic>.from(source.data);
+    final sourcePhone = (sourceData['phone'] as String?)?.trim() ?? '';
+    final sourceGroupIds = sourceData['groupIds'];
     final canonicalData = <String, dynamic>{
-      ...sourceData,
+      'fullName': (sourceData['fullName'] as String?)?.trim() ?? '',
+      'phone': sourcePhone.isEmpty ? null : sourcePhone,
+      'email': (sourceData['email'] as String?)?.trim(),
+      'isActive': (sourceData['isActive'] as bool?) ?? true,
+      'groupIds': sourceGroupIds is List
+          ? sourceGroupIds.whereType<String>().map((item) => item.trim()).toList()
+          : <String>[],
+      'createdAt': sourceData['createdAt'] ?? FieldValue.serverTimestamp(),
       'authUid': uid,
       'authEmail': authEmail,
-      'phone': normalizePhone((sourceData['phone'] as String?) ?? ''),
       'id': uid,
-      'isActive': (sourceData['isActive'] as bool?) ?? true,
-      'groupIds': sourceData['groupIds'] ?? <String>[],
       'passwordInitializedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -199,9 +205,7 @@ class TravellerAccountService {
       }
 
       await batch.commit();
-      print(
-        'First-time setup stage: UID-based traveller account write/update complete uid=$uid',
-      );
+      print('First-time setup stage: canonical traveller doc write success uid=$uid');
     } on FirebaseException catch (error) {
       throw TravellerAccountException(_mapFirestoreError(error));
     }
