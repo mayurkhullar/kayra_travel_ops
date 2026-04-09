@@ -4,18 +4,6 @@ import '../models/traveller_account.dart';
 import '../models/traveller_group_context.dart';
 import 'traveller_identity_mapper.dart';
 
-class TravellerAccountLookupResult {
-  const TravellerAccountLookupResult({
-    required this.documentId,
-    required this.data,
-  });
-
-  final String documentId;
-  final Map<String, dynamic> data;
-
-  TravellerAccount get account => TravellerAccount.fromFirestore(documentId, data);
-}
-
 class TravellerAccountService {
   TravellerAccountService({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -26,6 +14,8 @@ class TravellerAccountService {
       _firestore.collection('groups');
   CollectionReference<Map<String, dynamic>> get _travellerAccounts =>
       _firestore.collection('traveller_accounts');
+  CollectionReference<Map<String, dynamic>> get _travellers =>
+      _firestore.collection('travellers');
 
   Future<TravellerGroupContext> resolveGroupByCode(String routeGroupCode) async {
     final groupCode = routeGroupCode.trim();
@@ -77,58 +67,77 @@ class TravellerAccountService {
     }
   }
 
-  String normalizePhone(String input) => input.replaceAll(RegExp(r'\D'), '');
+  String normalizePhone(String input) => sanitizeTravellerPhone(input);
 
   String buildTravellerAuthEmail(String rawPhone) =>
       mapTravellerPhoneToAuthEmail(rawPhone);
 
-  Future<TravellerAccountLookupResult?> findByPhone(String phone) async {
-    final rawPhone = phone.trim();
-    final normalizedPhone = normalizePhone(phone);
-    if (rawPhone.isEmpty && normalizedPhone.isEmpty) {
-      return null;
-    }
+  Future<void> createTravellerAccountAndInitialTraveller({
+    required String uid,
+    required String phone,
+    required TravellerGroupContext group,
+  }) async {
+    final now = FieldValue.serverTimestamp();
+    final passportValidityStatus = group.isDomestic ? 'not_applicable' : 'valid';
+
+    final travellerAccountData = <String, dynamic>{
+      'id': uid,
+      'authUid': uid,
+      'fullName': '',
+      'phone': phone,
+      'email': '',
+      'isActive': true,
+      'groupIds': [group.id],
+      'createdAt': now,
+    };
+
+    final travellerData = <String, dynamic>{
+      'accountId': uid,
+      'groupId': group.id,
+      'travellerType': 'primary',
+      'linkedPrimaryTravellerId': null,
+      'fullName': '',
+      'phone': phone,
+      'email': '',
+      'status': 'draft',
+      'passportValidityStatus': passportValidityStatus,
+      'roomAssignmentId': null,
+      'flightAssignmentIds': <String>[],
+      'createdAt': now,
+    };
 
     try {
-      print('First-time setup stage: phone lookup started phone=$normalizedPhone');
-      Future<QuerySnapshot<Map<String, dynamic>>> queryByPhoneValue(
-        String phoneValue,
-      ) {
-        return _travellerAccounts.where('phone', isEqualTo: phoneValue).limit(1).get();
-      }
+      print('Signup stage: traveller_accounts doc write started uid=$uid');
+      final batch = _firestore.batch();
+      batch.set(_travellerAccounts.doc(uid), travellerAccountData);
 
-      var query = await queryByPhoneValue(normalizedPhone);
-      if (query.docs.isEmpty && rawPhone.isNotEmpty && rawPhone != normalizedPhone) {
-        query = await queryByPhoneValue(rawPhone);
-      }
+      print('Signup stage: travellers doc create started uid=$uid groupId=${group.id}');
+      batch.set(_travellers.doc(), travellerData);
 
-      if (query.docs.isEmpty) {
-        return null;
-      }
-
-      final doc = query.docs.first;
-      print(
-        'First-time setup stage: traveller account found by phone docId=${doc.id}',
-      );
-      return TravellerAccountLookupResult(documentId: doc.id, data: doc.data());
+      await batch.commit();
+      print('Signup stage: traveller_accounts doc write success uid=$uid');
+      print('Signup stage: travellers doc create success uid=$uid groupId=${group.id}');
     } on FirebaseException catch (error, stackTrace) {
       _printFirestoreError(
-        stage: 'Traveller account phone lookup',
+        stage: 'Signup stage',
         error: error,
         stackTrace: stackTrace,
       );
-      throw TravellerAccountException(_mapFirestoreError(error));
+      throw TravellerAccountException(
+        'Could not finish signup while saving traveller profile. Please try again.',
+      );
     }
   }
 
   Future<TravellerAccount?> getTravellerByUid(String uid) async {
     try {
-      print('Existing login stage: UID-based traveller account lookup started uid=$uid');
+      print('traveller_accounts doc lookup started uid=$uid');
       final doc = await _travellerAccounts.doc(uid).get();
       if (!doc.exists || doc.data() == null) {
+        print('traveller_accounts doc missing uid=$uid');
         return null;
       }
-      print('Existing login stage: traveller account found uid=$uid');
+      print('traveller_accounts doc found uid=$uid');
       return TravellerAccount.fromFirestore(doc.id, doc.data()!);
     } on FirebaseException catch (error, stackTrace) {
       _printFirestoreError(
@@ -153,62 +162,11 @@ class TravellerAccountService {
 
     if (!account.groupIds.contains(groupId)) {
       throw const TravellerAccountException(
-        'This traveller account is not linked to this group.',
+        'This account is not linked to this group yet.',
       );
     }
 
     print('$stage: group membership valid groupId=$groupId uid=${account.id}');
-  }
-
-  Future<void> upsertCanonicalTravellerAccount({
-    required TravellerAccountLookupResult source,
-    required String uid,
-    required String authEmail,
-  }) async {
-    final sourceData = Map<String, dynamic>.from(source.data);
-    final sourcePhone = (sourceData['phone'] as String?)?.trim() ?? '';
-    final sourceGroupIds = sourceData['groupIds'];
-    final canonicalData = <String, dynamic>{
-      'fullName': (sourceData['fullName'] as String?)?.trim() ?? '',
-      'phone': sourcePhone.isEmpty ? null : sourcePhone,
-      'email': (sourceData['email'] as String?)?.trim(),
-      'isActive': (sourceData['isActive'] as bool?) ?? true,
-      'groupIds': sourceGroupIds is List
-          ? sourceGroupIds.whereType<String>().map((item) => item.trim()).toList()
-          : <String>[],
-      'createdAt': sourceData['createdAt'] ?? FieldValue.serverTimestamp(),
-      'authUid': uid,
-      'authEmail': authEmail,
-      'id': uid,
-      'passwordInitializedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-
-    try {
-      print('First-time setup stage: canonical traveller doc write started uid=$uid');
-      final batch = _firestore.batch();
-      final canonicalRef = _travellerAccounts.doc(uid);
-      batch.set(canonicalRef, canonicalData, SetOptions(merge: true));
-
-      if (source.documentId != uid) {
-        batch.set(
-          _travellerAccounts.doc(source.documentId),
-          {
-            'authUid': uid,
-            'authEmail': authEmail,
-            'migratedToUid': uid,
-            'isCanonical': false,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-
-      await batch.commit();
-      print('First-time setup stage: canonical traveller doc write success uid=$uid');
-    } on FirebaseException catch (error) {
-      throw TravellerAccountException(_mapFirestoreError(error));
-    }
   }
 
   void _printFirestoreError({

@@ -1,5 +1,9 @@
+String sanitizeTravellerPhone(String phone) {
+  return phone.replaceAll(RegExp(r'\D'), '');
+}
+
 String mapTravellerPhoneToAuthEmail(String phone) {
-  final sanitizedPhone = phone.trim().replaceAll(' ', '');
+  final sanitizedPhone = sanitizeTravellerPhone(phone);
   if (sanitizedPhone.isEmpty) {
     throw const TravellerIdentityMapperException('Enter a valid mobile number.');
   }

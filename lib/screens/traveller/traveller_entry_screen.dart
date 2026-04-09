@@ -114,7 +114,7 @@ class _TravellerEntryScreenState extends State<TravellerEntryScreen> {
                                 ),
                               );
                             },
-                            child: const Text('First-time setup'),
+                            child: const Text('Sign up'),
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton(

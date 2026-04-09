@@ -46,7 +46,7 @@ class _TravellerFirstTimeSetupScreenState
     }
 
     if (widget.authProvider.isAuthenticated) {
-      print('First-time setup stage: navigation started destination=previous_screen');
+      print('Signup stage: navigation started destination=previous_screen');
       Navigator.of(context).pop();
     }
   }
@@ -57,7 +57,7 @@ class _TravellerFirstTimeSetupScreenState
       animation: widget.authProvider,
       builder: (context, _) {
         return Scaffold(
-          appBar: AppBar(title: const Text('First-time setup')),
+          appBar: AppBar(title: const Text('Traveller Sign up')),
           body: SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -119,7 +119,7 @@ class _TravellerFirstTimeSetupScreenState
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('Complete setup'),
+                              : const Text('Sign up'),
                         ),
                         if (widget.authProvider.errorMessage != null) ...[
                           const SizedBox(height: 12),

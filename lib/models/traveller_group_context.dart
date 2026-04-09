@@ -10,6 +10,7 @@ class TravellerGroupContext {
     this.endDate,
     required this.travellerLinkPath,
     required this.travellerLinkEnabled,
+    this.groupType,
   });
 
   final String id;
@@ -20,6 +21,9 @@ class TravellerGroupContext {
   final DateTime? endDate;
   final String travellerLinkPath;
   final bool travellerLinkEnabled;
+  final String? groupType;
+
+  bool get isDomestic => (groupType ?? '').toLowerCase() == 'domestic';
 
   factory TravellerGroupContext.fromFirestore(
     String documentId,
@@ -48,6 +52,7 @@ class TravellerGroupContext {
       travellerLinkPath: (data['travellerLinkPath'] as String?)?.trim() ??
           '/g/$groupCode',
       travellerLinkEnabled: (data['travellerLinkEnabled'] as bool?) ?? false,
+      groupType: (data['groupType'] as String?)?.trim(),
     );
   }
 }

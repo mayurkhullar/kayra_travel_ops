@@ -21,14 +21,12 @@ class TravellerAuthService {
       );
     } on FirebaseAuthException catch (error) {
       if (error.code == 'email-already-in-use') {
-        throw const TravellerAuthException(
-          'Traveller already initialized. Please log in.',
-        );
+        throw const TravellerAuthException('Account already exists. Please log in.');
       }
       throw TravellerAuthException(_mapError(error));
     } catch (_) {
       throw const TravellerAuthException(
-        'Unable to complete first-time setup right now. Please try again.',
+        'Unable to sign up right now. Please try again.',
       );
     }
   }
@@ -51,27 +49,6 @@ class TravellerAuthService {
     }
   }
 
-  Future<bool> authAccountExistsForEmail(String email) async {
-    try {
-      final probeCredential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password:
-            'Tmp#${DateTime.now().microsecondsSinceEpoch}aA!',
-      );
-      await probeCredential.user?.delete();
-      return false;
-    } on FirebaseAuthException catch (error) {
-      if (error.code == 'email-already-in-use') {
-        return true;
-      }
-      throw TravellerAuthException(_mapError(error));
-    } catch (_) {
-      throw const TravellerAuthException(
-        'Unable to verify traveller account right now. Please try again.',
-      );
-    }
-  }
-
   Future<void> signOut() async {
     try {
       await _firebaseAuth.signOut();
@@ -85,13 +62,12 @@ class TravellerAuthService {
   String _mapError(FirebaseAuthException error) {
     switch (error.code) {
       case 'wrong-password':
-        return 'Wrong password. Please try again.';
       case 'invalid-credential':
-        return 'Invalid credentials. Please check your mobile number and password.';
+        return 'Wrong mobile number or password.';
       case 'user-not-found':
-        return 'Mapped traveller auth account not found.';
+        return 'No account found for this mobile number. Please sign up first.';
       case 'email-already-in-use':
-        return 'This traveller account has already been initialized.';
+        return 'Account already exists. Please log in.';
       case 'weak-password':
         return 'Password is too weak. Use at least 6 characters.';
       case 'too-many-requests':

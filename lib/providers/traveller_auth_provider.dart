@@ -76,34 +76,21 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
-      print('First-time setup stage: setup started mobile=${mobile.trim()}');
+      print('Signup stage: signup started');
       if (password != confirmPassword) {
         throw const TravellerAccountException('Passwords do not match.');
       }
 
-      print('First-time setup stage: phone lookup started');
-      final accountLookup = await _accountService.findByPhone(mobile);
-      if (accountLookup == null) {
-        throw const TravellerAccountException('Mobile number not found.');
+      final sanitizedPhone = sanitizeTravellerPhone(mobile);
+      print('Signup stage: phone sanitized phone=$sanitizedPhone');
+      if (sanitizedPhone.isEmpty) {
+        throw const TravellerAccountException('Enter a valid mobile number.');
       }
 
-      final account = accountLookup.account;
-      print(
-        'First-time setup stage: eligible traveller found docId=${accountLookup.documentId}',
-      );
-      _accountService.validateAccountForGroup(
-        account: account,
-        groupId: group.id,
-        stage: 'First-time setup stage',
-      );
+      final authEmail = mapTravellerPhoneToAuthEmail(sanitizedPhone);
+      print('Signup stage: auth email generated email=$authEmail');
 
-      final authEmail = _accountService.buildTravellerAuthEmail(
-        account.phone ?? mobile,
-      );
-      print('First-time setup stage: auth email generated email=$authEmail');
-
-      print('First-time setup stage: Firebase Auth create user started');
-
+      print('Signup stage: Firebase Auth create-user started');
       final credential = await _authService.createTravellerCredential(
         email: authEmail,
         password: password,
@@ -113,68 +100,58 @@ class TravellerAuthProvider extends ChangeNotifier {
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
-      print('First-time setup stage: Firebase Auth create user success uid=$uid');
+      print('Signup stage: Firebase Auth create-user success uid=$uid');
 
       try {
-        await _accountService.upsertCanonicalTravellerAccount(
-          source: accountLookup,
+        await _accountService.createTravellerAccountAndInitialTraveller(
           uid: uid,
-          authEmail: authEmail,
+          phone: sanitizedPhone,
+          group: group,
         );
-      } on TravellerAccountException catch (error, stackTrace) {
-        print(
-          'First-time setup stage: canonical traveller doc write failed message=${error.message}',
-        );
-        print('First-time setup stage: stack $stackTrace');
+      } on TravellerAccountException {
         try {
           await credential.user?.delete();
-        } catch (deleteError, deleteStackTrace) {
-          print(
-            'First-time setup stage: rollback delete auth user failed message=$deleteError',
-          );
-          print('First-time setup stage: rollback stack $deleteStackTrace');
-        }
-        throw const TravellerAccountException(
-          'Account initialization failed while saving traveller profile. Please try again.',
-        );
+        } catch (_) {}
+        rethrow;
       }
 
       final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
         throw const TravellerAccountException(
-          'Traveller account mapping could not be completed.',
+          'Traveller account is missing after signup. Please contact support.',
         );
       }
+
       _accountService.validateAccountForGroup(
         account: refreshed,
         groupId: group.id,
-        stage: 'First-time setup stage',
+        stage: 'Signup stage',
       );
 
-      print('First-time setup stage: navigation started uid=$uid');
+      print('Signup stage: navigation started');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,
         updateAccount: true,
       );
     } on TravellerAccountException catch (error, stackTrace) {
-      print('First-time setup stage: exception ${error.message}');
-      print('First-time setup stage: stack $stackTrace');
+      print('Signup stage: caught exception message=${error.message}');
+      print('Signup stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerAuthException catch (error, stackTrace) {
-      print('First-time setup stage: auth exception ${error.message}');
-      print('First-time setup stage: stack $stackTrace');
+      print('Signup stage: caught exception message=${error.message}');
+      print('Signup stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerIdentityMapperException catch (error, stackTrace) {
-      print('First-time setup stage: identity mapper exception ${error.message}');
-      print('First-time setup stage: stack $stackTrace');
+      print('Signup stage: caught exception message=${error.message}');
+      print('Signup stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } catch (error, stackTrace) {
-      print('First-time setup stage: unexpected exception $error');
-      print('First-time setup stage: stack $stackTrace');
+      print('Signup stage: caught exception message=$error');
+      print('Signup stage: stack $stackTrace');
       _setState(
         isLoading: false,
-        errorMessage: 'Unable to complete setup. Please try again.',
+        errorMessage: 'Unable to complete signup. Please try again.',
       );
     }
   }
@@ -192,17 +169,17 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
-      print('Existing login stage: existing login started mobile=${mobile.trim()}');
-      final authEmail = mapTravellerPhoneToAuthEmail(mobile);
-      print('Existing login stage: mapped auth email generated email=$authEmail');
-
-      final authAccountExists = await _authService.authAccountExistsForEmail(authEmail);
-      if (!authAccountExists) {
-        throw const TravellerAuthException('Mapped auth account not found.');
+      print('Existing login stage: existing login started');
+      final sanitizedPhone = sanitizeTravellerPhone(mobile);
+      print('Existing login stage: phone sanitized phone=$sanitizedPhone');
+      if (sanitizedPhone.isEmpty) {
+        throw const TravellerAccountException('Enter a valid mobile number.');
       }
 
-      print('Existing login stage: Firebase Auth sign-in started');
+      final authEmail = mapTravellerPhoneToAuthEmail(sanitizedPhone);
+      print('Existing login stage: auth email generated email=$authEmail');
 
+      print('Existing login stage: Firebase Auth sign-in started');
       final credential = await _authService.signInTraveller(
         email: authEmail,
         password: password,
@@ -213,15 +190,12 @@ class TravellerAuthProvider extends ChangeNotifier {
       }
       print('Existing login stage: Firebase Auth sign-in success uid=$uid');
 
-      print('Existing login stage: canonical traveller doc lookup started uid=$uid');
       final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
-        print('Existing login stage: canonical traveller doc missing uid=$uid');
         throw const TravellerAccountException(
           'Traveller account is missing after login. Please contact support.',
         );
       }
-      print('Existing login stage: canonical traveller doc found uid=$uid');
 
       try {
         _accountService.validateAccountForGroup(
@@ -229,32 +203,32 @@ class TravellerAuthProvider extends ChangeNotifier {
           groupId: group.id,
           stage: 'Existing login stage',
         );
+        print('Existing login stage: group membership valid');
       } on TravellerAccountException {
-        print('Existing login stage: group membership invalid uid=$uid');
+        print('Existing login stage: group membership invalid');
         rethrow;
       }
-      print('Existing login stage: group membership valid uid=$uid');
 
-      print('Existing login stage: navigation starting uid=$uid');
+      print('Existing login stage: navigation started');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,
         updateAccount: true,
       );
     } on TravellerAccountException catch (error, stackTrace) {
-      print('Existing login stage: exception ${error.message}');
+      print('Existing login stage: caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerAuthException catch (error, stackTrace) {
-      print('Existing login stage: auth exception message=${error.message}');
+      print('Existing login stage: caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerIdentityMapperException catch (error, stackTrace) {
-      print('Existing login stage: identity mapper exception ${error.message}');
+      print('Existing login stage: caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } catch (error, stackTrace) {
-      print('Existing login stage: unexpected exception $error');
+      print('Existing login stage: caught exception message=$error');
       print('Existing login stage: stack $stackTrace');
       _setState(
         isLoading: false,
@@ -284,21 +258,14 @@ class TravellerAuthProvider extends ChangeNotifier {
     }
 
     try {
-      print(
-        'Auth state stage: canonical traveller doc lookup started uid=${firebaseUser.uid}',
-      );
       final account = await _accountService.getTravellerByUid(firebaseUser.uid);
       if (account == null) {
-        print(
-          'Auth state stage: canonical traveller doc missing uid=${firebaseUser.uid}',
-        );
         _setState(
           currentTravellerAccount: null,
           updateAccount: true,
         );
         return;
       }
-      print('Auth state stage: canonical traveller doc found uid=${firebaseUser.uid}');
 
       final group = _currentGroup;
       if (group != null) {
