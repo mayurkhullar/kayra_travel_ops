@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../providers/traveller_auth_provider.dart';
 import 'traveller_first_time_setup_screen.dart';
-import 'traveller_group_home_placeholder_screen.dart';
+import 'traveller_profile_screen.dart';
 import 'traveller_login_screen.dart';
 
 class TravellerEntryScreen extends StatefulWidget {
@@ -69,7 +69,7 @@ class _TravellerEntryScreenState extends State<TravellerEntryScreen> {
         }
 
         if (account != null) {
-          return TravellerGroupHomePlaceholderScreen(
+          return TravellerProfileScreen(
             authProvider: widget.authProvider,
           );
         }
