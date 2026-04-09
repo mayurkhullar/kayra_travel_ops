@@ -70,10 +70,11 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
-      final account = await _accountService.getTravellerByPhoneForGroup(
-        phone: mobile,
-        groupId: group.id,
-      );
+      final account = await _accountService.findByPhone(mobile);
+      if (account == null) {
+        throw const TravellerAccountException('Mobile number not found.');
+      }
+      _accountService.validateAccountForGroup(account: account, groupId: group.id);
 
       if (account.isInitialized) {
         throw const TravellerAccountException(
@@ -100,10 +101,13 @@ class TravellerAuthProvider extends ChangeNotifier {
         authEmail: authEmail,
       );
 
-      final refreshed = await _accountService.getTravellerByPhoneForGroup(
-        phone: mobile,
-        groupId: group.id,
-      );
+      final refreshed = await _accountService.getTravellerByAuthUid(uid);
+      if (refreshed == null) {
+        throw const TravellerAccountException(
+          'Traveller account mapping could not be completed.',
+        );
+      }
+      _accountService.validateAccountForGroup(account: refreshed, groupId: group.id);
 
       _setState(
         isLoading: false,
@@ -135,19 +139,24 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
-      final account = await _accountService.getTravellerByPhoneForGroup(
-        phone: mobile,
-        groupId: group.id,
-      );
+      final account = await _accountService.findByPhone(mobile);
+      if (account == null) {
+        throw const TravellerAccountException('Mobile number not found.');
+      }
+      _accountService.validateAccountForGroup(account: account, groupId: group.id);
 
-      if (!account.isInitialized || account.authEmail == null) {
+      if (!account.isInitialized) {
         throw const TravellerAccountException(
           'First-time setup is required before login.',
         );
       }
 
+      final authEmail = _accountService.buildTravellerAuthEmail(
+        account.phone ?? mobile,
+      );
+
       final credential = await _authService.signInTraveller(
-        email: account.authEmail!,
+        email: authEmail,
         password: password,
       );
       final uid = credential.user?.uid;
@@ -155,22 +164,19 @@ class TravellerAuthProvider extends ChangeNotifier {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
 
-      if (account.authUid == null || account.authUid!.isEmpty) {
-        await _accountService.attachAuthToTravellerAccount(
-          travellerId: account.id,
-          authUid: uid,
-          authEmail: account.authEmail!,
-        );
-      } else if (account.authUid != uid) {
+      if (account.authUid != uid) {
         throw const TravellerAccountException(
           'This traveller login does not match your account mapping.',
         );
       }
 
-      final refreshed = await _accountService.getTravellerByPhoneForGroup(
-        phone: mobile,
-        groupId: group.id,
-      );
+      final refreshed = await _accountService.getTravellerByAuthUid(uid);
+      if (refreshed == null) {
+        throw const TravellerAccountException(
+          'Traveller account mapping is missing for this login.',
+        );
+      }
+      _accountService.validateAccountForGroup(account: refreshed, groupId: group.id);
 
       _setState(
         isLoading: false,
@@ -224,6 +230,14 @@ class TravellerAuthProvider extends ChangeNotifier {
         await _authService.signOut();
         _setState(
           errorMessage: 'This traveller account is not linked to this group.',
+        );
+        return;
+      }
+      if (!account.isActive) {
+        await _authService.signOut();
+        _setState(
+          errorMessage:
+              'This traveller account is inactive. Please contact support.',
         );
         return;
       }

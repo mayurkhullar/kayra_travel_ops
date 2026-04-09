@@ -66,50 +66,12 @@ class TravellerAccountService {
     required String phone,
     required String groupId,
   }) async {
-    final candidates = <String>{phone.trim()};
-    final normalized = normalizePhone(phone);
-    if (normalized.isNotEmpty) {
-      candidates.add(normalized);
-      if (!normalized.startsWith('1')) {
-        candidates.add('1$normalized');
-      }
-      candidates.add('+$normalized');
-      if (!normalized.startsWith('1')) {
-        candidates.add('+1$normalized');
-      }
-    }
-
     try {
-      QueryDocumentSnapshot<Map<String, dynamic>>? found;
-      for (final candidate in candidates.where((value) => value.isNotEmpty)) {
-        final query = await _travellerAccounts
-            .where('phone', isEqualTo: candidate)
-            .limit(1)
-            .get();
-        if (query.docs.isNotEmpty) {
-          found = query.docs.first;
-          break;
-        }
-      }
-
-      if (found == null) {
+      final account = await findByPhone(phone);
+      if (account == null) {
         throw const TravellerAccountException('Mobile number not found.');
       }
-
-      final account = TravellerAccount.fromFirestore(found.id, found.data());
-
-      if (!account.isActive) {
-        throw const TravellerAccountException(
-          'This traveller account is inactive. Please contact support.',
-        );
-      }
-
-      if (!account.groupIds.contains(groupId)) {
-        throw const TravellerAccountException(
-          'This traveller account is not linked to this group.',
-        );
-      }
-
+      validateAccountForGroup(account: account, groupId: groupId);
       return account;
     } on TravellerAccountException {
       rethrow;
@@ -118,6 +80,44 @@ class TravellerAccountService {
     } catch (_) {
       throw const TravellerAccountException(
         'Unable to load traveller account. Please try again.',
+      );
+    }
+  }
+
+  Future<TravellerAccount?> findByPhone(String phone) async {
+    final normalizedPhone = phone.trim();
+    if (normalizedPhone.isEmpty) {
+      return null;
+    }
+
+    try {
+      final query = await _travellerAccounts
+          .where('phone', isEqualTo: normalizedPhone)
+          .limit(1)
+          .get();
+      if (query.docs.isEmpty) {
+        return null;
+      }
+      final doc = query.docs.first;
+      return TravellerAccount.fromFirestore(doc.id, doc.data());
+    } on FirebaseException catch (error) {
+      throw TravellerAccountException(_mapFirestoreError(error));
+    }
+  }
+
+  void validateAccountForGroup({
+    required TravellerAccount account,
+    required String groupId,
+  }) {
+    if (!account.isActive) {
+      throw const TravellerAccountException(
+        'This traveller account is inactive. Please contact support.',
+      );
+    }
+
+    if (!account.groupIds.contains(groupId)) {
+      throw const TravellerAccountException(
+        'This traveller account is not linked to this group.',
       );
     }
   }
