@@ -1,23 +1,46 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /traveller_accounts/{id} {
-      allow read: if request.auth != null
-        && resource.data.authUid == request.auth.uid;
-      allow write: if false;
+    match /users/{userId} {
+      // Internal app access only (must be authenticated).
+      allow read, write: if request.auth != null;
     }
 
     match /groups/{groupId} {
+      // Authenticated users can read groups, and public read is allowed only
+      // when traveller links are explicitly enabled on the group document.
       allow read: if request.auth != null
-        && exists(
-          /databases/$(database)/documents/traveller_accounts/$(request.auth.uid)
-        )
-        && groupId in get(
-          /databases/$(database)/documents/traveller_accounts/$(request.auth.uid)
-        ).data.groupIds;
+        || resource.data.travellerLinkEnabled == true;
       allow write: if false;
     }
 
+    match /traveller_accounts/{accountId} {
+      // Travellers can only read their own account document.
+      allow read: if request.auth != null
+        && accountId == request.auth.uid;
+
+      // Travellers can only create/update their own account document, and the
+      // stored authUid must match the authenticated UID.
+      allow create, update: if request.auth != null
+        && accountId == request.auth.uid
+        && request.resource.data.authUid == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    match /travellers/{travellerId} {
+      // Travellers can only read records tied to their own account.
+      allow read: if request.auth != null
+        && resource.data.accountId == request.auth.uid;
+
+      // Travellers can only create their own traveller record.
+      allow create: if request.auth != null
+        && request.resource.data.accountId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    // Lock everything else by default.
     match /{document=**} {
       allow read, write: if false;
     }
