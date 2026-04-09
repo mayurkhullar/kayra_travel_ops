@@ -43,8 +43,8 @@ class TravellerGroupContext {
           ? (data['name'] as String).trim()
           : 'Travel Group',
       destination: (data['destination'] as String?)?.trim(),
-      startDate: parseDate(data['startDate']),
-      endDate: parseDate(data['endDate']),
+      startDate: parseDate(data['departureDate']) ?? parseDate(data['startDate']),
+      endDate: parseDate(data['arrivalDate']) ?? parseDate(data['endDate']),
       travellerLinkPath: (data['travellerLinkPath'] as String?)?.trim() ??
           '/g/$groupCode',
       travellerLinkEnabled: (data['travellerLinkEnabled'] as bool?) ?? false,

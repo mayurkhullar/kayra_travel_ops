@@ -32,7 +32,6 @@ class TravellerAuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> initializeFromGroupLink(String routeGroupCode) async {
-    print('Traveller login: route/group code received code=${routeGroupCode.trim()}');
     _setState(isLoading: true, clearError: true);
 
     try {
@@ -41,7 +40,9 @@ class TravellerAuthProvider extends ChangeNotifier {
 
       _authSubscription ??= _authService.authStateChanges().listen(
         _onAuthStateChanged,
-        onError: (_) {
+        onError: (error, stackTrace) {
+          print('Traveller auth state listener error: $error');
+          print('Traveller auth state listener stack: $stackTrace');
           _setState(
             isLoading: false,
             errorMessage: 'Unable to restore traveller session.',
@@ -50,7 +51,9 @@ class TravellerAuthProvider extends ChangeNotifier {
       );
     } on TravellerAccountException catch (error) {
       _setState(isLoading: false, errorMessage: error.message);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      print('Traveller link stage: unexpected exception $error');
+      print('Traveller link stage: stack $stackTrace');
       _setState(
         isLoading: false,
         errorMessage: 'Unable to load traveller entry right now.',
@@ -64,28 +67,36 @@ class TravellerAuthProvider extends ChangeNotifier {
   }) async {
     final group = _currentGroup;
     if (group == null) {
-      _setState(errorMessage: 'Group context missing for setup.');
+      _setState(errorMessage: 'Invalid traveller link.');
       return;
     }
 
     _setState(isLoading: true, clearError: true);
 
     try {
-      final account = await _accountService.findByPhone(mobile);
-      if (account == null) {
+      final accountLookup = await _accountService.findByPhone(mobile);
+      if (accountLookup == null) {
         throw const TravellerAccountException('Mobile number not found.');
       }
-      _accountService.validateAccountForGroup(account: account, groupId: group.id);
+
+      final account = accountLookup.account;
+      _accountService.validateAccountForGroup(
+        account: account,
+        groupId: group.id,
+        stage: 'First-time setup stage',
+      );
 
       if (account.isInitialized) {
         throw const TravellerAccountException(
-          'First-time setup already completed for this mobile number.',
+          'This traveller account is already initialized. Please use existing login.',
         );
       }
 
       final authEmail = _accountService.buildTravellerAuthEmail(
         account.phone ?? mobile,
       );
+      print('First-time setup stage: auth email generated email=$authEmail');
+
       final credential = await _authService.createTravellerCredential(
         email: authEmail,
         password: password,
@@ -95,31 +106,43 @@ class TravellerAuthProvider extends ChangeNotifier {
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
+      print('First-time setup stage: Firebase Auth user created uid=$uid');
 
-      await _accountService.attachAuthToTravellerAccount(
-        travellerId: account.id,
-        authUid: uid,
+      await _accountService.upsertCanonicalTravellerAccount(
+        source: accountLookup,
+        uid: uid,
         authEmail: authEmail,
       );
 
-      final refreshed = await _accountService.getTravellerByAuthUid(uid);
+      final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
         throw const TravellerAccountException(
           'Traveller account mapping could not be completed.',
         );
       }
-      _accountService.validateAccountForGroup(account: refreshed, groupId: group.id);
+      _accountService.validateAccountForGroup(
+        account: refreshed,
+        groupId: group.id,
+        stage: 'First-time setup stage',
+      );
 
+      print('First-time setup stage: auto-login/navigation starting uid=$uid');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,
         updateAccount: true,
       );
-    } on TravellerAccountException catch (error) {
+    } on TravellerAccountException catch (error, stackTrace) {
+      print('First-time setup stage: exception ${error.message}');
+      print('First-time setup stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
-    } on TravellerAuthException catch (error) {
+    } on TravellerAuthException catch (error, stackTrace) {
+      print('First-time setup stage: auth exception ${error.message}');
+      print('First-time setup stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      print('First-time setup stage: unexpected exception $error');
+      print('First-time setup stage: stack $stackTrace');
       _setState(
         isLoading: false,
         errorMessage: 'Unable to complete setup. Please try again.',
@@ -133,30 +156,16 @@ class TravellerAuthProvider extends ChangeNotifier {
   }) async {
     final group = _currentGroup;
     if (group == null) {
-      _setState(errorMessage: 'Group context missing for login.');
+      _setState(errorMessage: 'Invalid traveller link.');
       return;
     }
 
     _setState(isLoading: true, clearError: true);
 
     try {
-      print('Traveller login attempt starting mobile=${mobile.trim()}');
-      final account = await _accountService.findByPhone(mobile);
-      if (account == null) {
-        throw const TravellerAccountException('Mobile number not found.');
-      }
-      print('Traveller login: group access validation starting groupId=${group.id}');
-      _accountService.validateAccountForGroup(account: account, groupId: group.id);
-
-      if (!account.isInitialized) {
-        throw const TravellerAccountException(
-          'First-time setup is required before login.',
-        );
-      }
-
-      final authEmail = _accountService.buildTravellerAuthEmail(
-        account.phone ?? mobile,
-      );
+      print('Existing login stage: existing login started mobile=${mobile.trim()}');
+      final authEmail = _accountService.buildTravellerAuthEmail(mobile);
+      print('Existing login stage: auth email generated email=$authEmail');
 
       final credential = await _authService.signInTraveller(
         email: authEmail,
@@ -166,36 +175,38 @@ class TravellerAuthProvider extends ChangeNotifier {
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
-      print('Traveller login: Firebase Auth login success uid=$uid');
+      print('Existing login stage: Firebase Auth sign-in success with uid=$uid');
 
-      if (account.authUid != uid) {
-        throw const TravellerAccountException(
-          'This traveller login does not match your account mapping.',
-        );
-      }
-
-      print('Traveller account read starting uid=$uid');
-      final refreshed = await _accountService.getTravellerByAuthUid(uid);
+      final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
-        print('Traveller account read: failure uid=$uid reason=not_found');
         throw const TravellerAccountException(
-          'Traveller account mapping is missing for this login.',
+          'Traveller account is missing after login. Please contact support.',
         );
       }
-      print('Traveller account read: success uid=$uid');
-      print('Traveller login: group access validation starting groupId=${group.id}');
-      _accountService.validateAccountForGroup(account: refreshed, groupId: group.id);
 
+      _accountService.validateAccountForGroup(
+        account: refreshed,
+        groupId: group.id,
+        stage: 'Existing login stage',
+      );
+
+      print('Existing login stage: navigation starting uid=$uid');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,
         updateAccount: true,
       );
-    } on TravellerAccountException catch (error) {
+    } on TravellerAccountException catch (error, stackTrace) {
+      print('Existing login stage: exception ${error.message}');
+      print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
-    } on TravellerAuthException catch (error) {
+    } on TravellerAuthException catch (error, stackTrace) {
+      print('Existing login stage: auth exception ${error.message}');
+      print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      print('Existing login stage: unexpected exception $error');
+      print('Existing login stage: stack $stackTrace');
       _setState(
         isLoading: false,
         errorMessage: 'Unable to login right now. Please try again.',
@@ -224,37 +235,27 @@ class TravellerAuthProvider extends ChangeNotifier {
     }
 
     try {
-      print('Traveller account read starting uid=${firebaseUser.uid}');
-      final account = await _accountService.getTravellerByAuthUid(firebaseUser.uid);
+      final account = await _accountService.getTravellerByUid(firebaseUser.uid);
       if (account == null) {
-        print('Traveller account read: failure uid=${firebaseUser.uid} reason=not_found');
         _setState(
           currentTravellerAccount: null,
           updateAccount: true,
         );
         return;
       }
-      print('Traveller account read: success uid=${firebaseUser.uid}');
 
       final group = _currentGroup;
-      if (group != null && !account.groupIds.contains(group.id)) {
-        await _authService.signOut();
-        _setState(
-          errorMessage: 'This traveller account is not linked to this group.',
+      if (group != null) {
+        _accountService.validateAccountForGroup(
+          account: account,
+          groupId: group.id,
+          stage: 'Auth state stage',
         );
-        return;
-      }
-      if (!account.isActive) {
-        await _authService.signOut();
-        _setState(
-          errorMessage:
-              'This traveller account is inactive. Please contact support.',
-        );
-        return;
       }
 
       _setState(currentTravellerAccount: account, updateAccount: true);
     } on TravellerAccountException catch (error) {
+      await _authService.signOut();
       _setState(errorMessage: error.message);
     }
   }
