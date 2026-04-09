@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/traveller_profile.dart';
 import '../../providers/traveller_auth_provider.dart';
 import '../../services/traveller_profile_service.dart';
+import 'traveller_documents_screen.dart';
 
 class TravellerProfileScreen extends StatefulWidget {
   const TravellerProfileScreen({
@@ -304,6 +305,22 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
                                 child: Text(
                                   _isSaving ? 'Saving...' : 'Save Profile',
                                 ),
+                              ),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: _isSaving
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => TravellerDocumentsScreen(
+                                              authProvider: widget.authProvider,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                icon: const Icon(Icons.upload_file),
+                                label: const Text('Go to Documents'),
                               ),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
