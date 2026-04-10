@@ -63,7 +63,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
 
       final latest = await _documentsService.loadLatestDocumentsByType(
         groupId: contextData.groupId,
-        travellerId: contextData.travellerId,
+        travellerAuthUid: contextData.travellerAuthUid,
       );
 
       if (!mounted) {
@@ -135,7 +135,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
     try {
       await _documentsService.uploadDocument(
         groupId: contextData.groupId,
-        travellerId: contextData.travellerId,
+        travellerId: contextData.travellerAuthUid,
         documentType: documentType,
         file: selected,
       );
@@ -219,12 +219,21 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text('Group ID: ${contextData.groupId}'),
-                  Text('Traveller ID: ${contextData.travellerId}'),
+                  Text('Traveller UID: ${contextData.travellerAuthUid}'),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 12),
+          if (_latestDocuments.isEmpty) ...[
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('No documents uploaded yet.'),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           ..._requiredDocumentTypes.map(_buildDocumentCard),
           if (_errorMessage != null) ...[
             const SizedBox(height: 12),

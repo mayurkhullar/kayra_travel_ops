@@ -8,12 +8,12 @@ class TravellerDocumentContext {
   const TravellerDocumentContext({
     required this.groupId,
     required this.groupType,
-    required this.travellerId,
+    required this.travellerAuthUid,
   });
 
   final String groupId;
   final String groupType;
-  final String travellerId;
+  final String travellerAuthUid;
 }
 
 class TravellerDocumentsService {
@@ -68,7 +68,7 @@ class TravellerDocumentsService {
       return TravellerDocumentContext(
         groupId: groupId,
         groupType: groupType,
-        travellerId: travellerDoc.id,
+        travellerAuthUid: accountUid,
       );
     } on FirebaseException catch (error, stackTrace) {
       print('Traveller docs: caught exception message=${error.message ?? error.code}');
@@ -89,13 +89,18 @@ class TravellerDocumentsService {
 
   Future<Map<String, TravellerDocument>> loadLatestDocumentsByType({
     required String groupId,
-    required String travellerId,
+    required String travellerAuthUid,
   }) async {
     try {
+      print(
+        'Documents load: uid=$travellerAuthUid groupId=$groupId '
+        'filters={travellerId:$travellerAuthUid, groupId:$groupId}',
+      );
       final snapshot = await _documents
+          .where('travellerId', isEqualTo: travellerAuthUid)
           .where('groupId', isEqualTo: groupId)
-          .where('travellerId', isEqualTo: travellerId)
           .get();
+      print('Documents load: fetched ${snapshot.docs.length} docs');
 
       final latestByType = <String, TravellerDocument>{};
 
@@ -114,6 +119,7 @@ class TravellerDocumentsService {
 
       return latestByType;
     } on FirebaseException catch (error, stackTrace) {
+      print('Documents load error: ${error.message ?? error.code}');
       print('Traveller docs: caught exception message=${error.message ?? error.code}');
       print('Traveller docs: stack=${stackTrace.toString().split('\n').first}');
       throw TravellerDocumentsException(
