@@ -260,8 +260,8 @@ class _TravellerReviewScreenState extends State<TravellerReviewScreen> {
           const SizedBox(height: 12),
           Card(
             color: snapshot.isComplete
-                ? Colors.green.withOpacity(0.08)
-                : Colors.orange.withOpacity(0.10),
+                ? Colors.green.withValues(alpha: 0.08)
+                : Colors.orange.withValues(alpha: 0.10),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
