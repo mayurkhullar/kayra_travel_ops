@@ -9,11 +9,13 @@ class RoleHomeScaffold extends StatelessWidget {
     required this.title,
     required this.roleLabel,
     required this.authProvider,
+    this.quickActions = const <Widget>[],
   });
 
   final String title;
   final String roleLabel;
   final AuthProvider authProvider;
+  final List<Widget> quickActions;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +36,12 @@ class RoleHomeScaffold extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Name: ${user?.name?.isNotEmpty == true ? user!.name : '-'}'),
             Text('Email: ${user?.email ?? '-'}'),
+            if (quickActions.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Text('Quick Actions', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              ...quickActions,
+            ],
             const SizedBox(height: 24),
             FilledButton.tonalIcon(
               onPressed: () async {
