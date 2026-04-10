@@ -128,6 +128,42 @@ class TravellerDocumentsService {
     }
   }
 
+
+
+  Future<Map<String, TravellerDocument>> loadLatestActiveDocumentsByType({
+    required String groupId,
+    required String travellerAuthUid,
+  }) async {
+    try {
+      final snapshot = await _documents
+          .where('travellerId', isEqualTo: travellerAuthUid)
+          .where('groupId', isEqualTo: groupId)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final latestByType = <String, TravellerDocument>{};
+
+      for (final doc in snapshot.docs) {
+        final parsed = TravellerDocument.fromFirestore(doc.id, doc.data());
+        if (parsed.status == TravellerDocumentStatus.superseded) {
+          continue;
+        }
+
+        final current = latestByType[parsed.documentType];
+        if (current == null || parsed.version > current.version) {
+          latestByType[parsed.documentType] = parsed;
+        }
+      }
+
+      return latestByType;
+    } on FirebaseException catch (error, stackTrace) {
+      print('Traveller docs: caught exception message=${error.message ?? error.code}');
+      print('Traveller docs: stack=${stackTrace.toString().split('\n').first}');
+      throw TravellerDocumentsException(
+        error.message ?? 'Unable to load active document status.',
+      );
+    }
+  }
   Future<void> uploadDocument({
     required String groupId,
     required String travellerAuthUid,

@@ -7,6 +7,7 @@ import '../../utils/app_dialogs.dart';
 import '../../widgets/app_loading_overlay.dart';
 import '../../widgets/app_primary_button.dart';
 import 'traveller_documents_screen.dart';
+import 'traveller_review_screen.dart';
 
 class TravellerProfileScreen extends StatefulWidget {
   const TravellerProfileScreen({
@@ -342,6 +343,22 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
                                       },
                                 icon: const Icon(Icons.upload_file),
                                 label: const Text('Go to Documents'),
+                              ),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: _isSaving
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => TravellerReviewScreen(
+                                              authProvider: widget.authProvider,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                icon: const Icon(Icons.checklist),
+                                label: const Text('Review & Submit'),
                               ),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(

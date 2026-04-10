@@ -7,6 +7,7 @@ import '../../services/traveller_documents_service.dart';
 import '../../utils/app_dialogs.dart';
 import '../../widgets/app_loading_overlay.dart';
 import '../../widgets/app_primary_button.dart';
+import 'traveller_review_screen.dart';
 
 class TravellerDocumentsScreen extends StatefulWidget {
   const TravellerDocumentsScreen({
@@ -267,6 +268,22 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
               style: const TextStyle(color: Colors.red),
             ),
           ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _isUploadingAny
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TravellerReviewScreen(
+                          authProvider: widget.authProvider,
+                        ),
+                      ),
+                    );
+                  },
+            icon: const Icon(Icons.checklist),
+            label: const Text('Review & Submit'),
+          ),
         ],
       ),
     );
