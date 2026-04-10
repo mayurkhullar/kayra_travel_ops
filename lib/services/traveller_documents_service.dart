@@ -130,7 +130,7 @@ class TravellerDocumentsService {
 
   Future<void> uploadDocument({
     required String groupId,
-    required String travellerId,
+    required String travellerAuthUid,
     required String documentType,
     required PlatformFile file,
   }) async {
@@ -140,7 +140,7 @@ class TravellerDocumentsService {
       throw const TravellerDocumentsException('Group context is missing.');
     }
 
-    if ((travellerId).trim().isEmpty) {
+    if ((travellerAuthUid).trim().isEmpty) {
       throw const TravellerDocumentsException('Traveller context is missing.');
     }
 
@@ -151,7 +151,7 @@ class TravellerDocumentsService {
     try {
       final previousSnapshot = await _documents
           .where('groupId', isEqualTo: groupId)
-          .where('travellerId', isEqualTo: travellerId)
+          .where('travellerId', isEqualTo: travellerAuthUid)
           .where('documentType', isEqualTo: documentType)
           .get();
 
@@ -170,7 +170,7 @@ class TravellerDocumentsService {
 
       final extension = _resolveFileExtension(file);
       final storagePath =
-          'groups/$groupId/travellers/$travellerId/documents/${documentType}_v$nextVersion$extension';
+          'groups/$groupId/travellers/$travellerAuthUid/documents/${documentType}_v$nextVersion$extension';
 
       print('Traveller docs: upload started path=$storagePath');
 
@@ -197,7 +197,7 @@ class TravellerDocumentsService {
       batch.set(newDocumentRef, <String, dynamic>{
         'id': newDocumentRef.id,
         'groupId': groupId,
-        'travellerId': travellerId,
+        'travellerId': travellerAuthUid,
         'documentType': documentType,
         'storagePath': storagePath,
         'version': nextVersion,
