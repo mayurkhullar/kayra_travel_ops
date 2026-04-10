@@ -2,49 +2,67 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1) Staff user bootstrap/profile docs (users/{uid})
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isManagerOrSuperAdmin() {
+      return isSignedIn()
+        && currentUserDoc().data.isActive == true
+        && (currentUserDoc().data.role == 'manager'
+          || currentUserDoc().data.role == 'super_admin');
+    }
+
+    function isInternalReviewer() {
+      return isManagerOrSuperAdmin();
+    }
+
+    // 1) Staff/traveller user bootstrap/profile docs (users/{uid})
     match /users/{userId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // 2) Group docs used by traveller-link entry and authenticated app reads.
     match /groups/{groupId} {
-      allow read: if resource.data.travellerLinkEnabled == true
-        || request.auth != null;
+      allow read: if resource.data.travellerLinkEnabled == true || isSignedIn();
       allow write: if false;
     }
 
     // 3) Traveller account root doc keyed by auth UID.
     match /traveller_accounts/{accountId} {
-      allow read, create, update: if request.auth != null
-        && accountId == request.auth.uid;
+      allow read: if (isSignedIn() && accountId == request.auth.uid)
+        || isInternalReviewer();
+      allow create, update: if isSignedIn() && accountId == request.auth.uid;
       allow delete: if false;
     }
 
     // 4) Traveller profile records tied to authenticated traveller account.
     match /travellers/{travellerId} {
-      allow read: if request.auth != null
-        && resource.data.accountId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.accountId == request.auth.uid)
+        || isInternalReviewer();
 
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
         && request.resource.data.accountId == request.auth.uid;
 
-      allow update: if request.auth != null
-        && resource.data.accountId == request.auth.uid;
+      allow update: if (isSignedIn() && resource.data.accountId == request.auth.uid)
+        || isInternalReviewer();
 
       allow delete: if false;
     }
 
     // 5) Traveller document metadata records tied to authenticated traveller.
     match /documents/{documentId} {
-      allow read: if request.auth != null
-        && resource.data.travellerId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.travellerId == request.auth.uid)
+        || isInternalReviewer();
 
-      allow create: if request.auth != null
+      allow create: if isSignedIn()
         && request.resource.data.travellerId == request.auth.uid;
 
-      allow update: if request.auth != null
+      allow update: if isSignedIn()
         && resource.data.travellerId == request.auth.uid;
 
       allow delete: if false;
