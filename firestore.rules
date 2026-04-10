@@ -40,6 +40,23 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /documents/{documentId} {
+      // Travellers can read only their own document records.
+      allow read: if request.auth != null
+        && resource.data.travellerId == request.auth.uid;
+
+      // Travellers can create document records only for themselves.
+      allow create: if request.auth != null
+        && request.resource.data.travellerId == request.auth.uid;
+
+      // Travellers can update only their own document records.
+      allow update: if request.auth != null
+        && resource.data.travellerId == request.auth.uid;
+
+      // Deletes are blocked for now.
+      allow delete: if false;
+    }
+
     // Lock everything else by default.
     match /{document=**} {
       allow read, write: if false;
