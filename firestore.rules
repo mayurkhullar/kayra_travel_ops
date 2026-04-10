@@ -1,63 +1,56 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // 1) Staff user bootstrap/profile docs (users/{uid})
     match /users/{userId} {
-      // Internal app access only (must be authenticated).
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null
+        && request.auth.uid == userId;
     }
 
+    // 2) Group docs used by traveller-link entry and authenticated app reads.
     match /groups/{groupId} {
-      // Authenticated users can read groups, and public read is allowed only
-      // when traveller links are explicitly enabled on the group document.
-      allow read: if request.auth != null
-        || resource.data.travellerLinkEnabled == true;
+      allow read: if resource.data.travellerLinkEnabled == true
+        || request.auth != null;
       allow write: if false;
     }
 
+    // 3) Traveller account root doc keyed by auth UID.
     match /traveller_accounts/{accountId} {
-      // Travellers can only read their own account document.
-      allow read: if request.auth != null
+      allow read, create, update: if request.auth != null
         && accountId == request.auth.uid;
-
-      // Travellers can only create/update their own account document, and the
-      // stored authUid must match the authenticated UID.
-      allow create, update: if request.auth != null
-        && accountId == request.auth.uid
-        && request.resource.data.authUid == request.auth.uid;
-
       allow delete: if false;
     }
 
+    // 4) Traveller profile records tied to authenticated traveller account.
     match /travellers/{travellerId} {
-      // Travellers can only read records tied to their own account.
       allow read: if request.auth != null
         && resource.data.accountId == request.auth.uid;
 
-      // Travellers can only create their own traveller record.
       allow create: if request.auth != null
         && request.resource.data.accountId == request.auth.uid;
 
-      allow update, delete: if false;
-    }
-
-    match /documents/{documentId} {
-      // Travellers can read only their own document records.
-      allow read: if request.auth != null
-        && resource.data.travellerId == request.auth.uid;
-
-      // Travellers can create document records only for themselves.
-      allow create: if request.auth != null
-        && request.resource.data.travellerId == request.auth.uid;
-
-      // Travellers can update only their own document records.
       allow update: if request.auth != null
-        && resource.data.travellerId == request.auth.uid;
+        && resource.data.accountId == request.auth.uid;
 
-      // Deletes are blocked for now.
       allow delete: if false;
     }
 
-    // Lock everything else by default.
+    // 5) Traveller document metadata records tied to authenticated traveller.
+    match /documents/{documentId} {
+      allow read: if request.auth != null
+        && resource.data.travellerId == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.travellerId == request.auth.uid;
+
+      allow update: if request.auth != null
+        && resource.data.travellerId == request.auth.uid;
+
+      allow delete: if false;
+    }
+
+    // 6) Default deny-all for everything not explicitly allowed above.
     match /{document=**} {
       allow read, write: if false;
     }
