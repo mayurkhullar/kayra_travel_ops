@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../utils/app_dialogs.dart';
 
 class RoleHomeScaffold extends StatelessWidget {
   const RoleHomeScaffold({
@@ -36,10 +37,29 @@ class RoleHomeScaffold extends StatelessWidget {
             const SizedBox(height: 24),
             FilledButton.tonalIcon(
               onPressed: () async {
+                final shouldLogout = await AppDialogs.showConfirmation(
+                  context,
+                  title: 'Logout',
+                  message: 'Are you sure you want to logout?',
+                  confirmText: 'Logout',
+                  isDestructive: true,
+                );
+
+                if (!shouldLogout) {
+                  return;
+                }
+
                 try {
                   await authProvider.signOut();
                 } catch (_) {
-                  // Signout failures are surfaced in auth provider error state.
+                  if (!context.mounted) {
+                    return;
+                  }
+                  await AppDialogs.showError(
+                    context,
+                    title: 'Logout failed',
+                    message: authProvider.errorMessage ?? 'Unable to logout right now.',
+                  );
                 }
               },
               icon: const Icon(Icons.logout),

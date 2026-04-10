@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import '../../models/traveller_document.dart';
 import '../../providers/traveller_auth_provider.dart';
 import '../../services/traveller_documents_service.dart';
+import '../../utils/app_dialogs.dart';
+import '../../widgets/app_loading_overlay.dart';
+import '../../widgets/app_primary_button.dart';
 
 class TravellerDocumentsScreen extends StatefulWidget {
   const TravellerDocumentsScreen({
@@ -22,11 +25,14 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
 
   TravellerDocumentContext? _context;
   List<String> _requiredDocumentTypes = const <String>[];
-  Map<String, TravellerDocument> _latestDocuments = const <String, TravellerDocument>{};
+  Map<String, TravellerDocument> _latestDocuments =
+      const <String, TravellerDocument>{};
 
   bool _isLoading = true;
   String? _errorMessage;
   final Set<String> _uploadingTypes = <String>{};
+
+  bool get _isUploadingAny => _uploadingTypes.isNotEmpty;
 
   @override
   void initState() {
@@ -97,11 +103,19 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
   }
 
   Future<void> _pickAndUpload(String documentType) async {
+    if (_uploadingTypes.contains(documentType)) {
+      return;
+    }
+
     final contextData = _context;
     if (contextData == null) {
       setState(() {
         _errorMessage = 'Missing traveller document context.';
       });
+      await AppDialogs.showError(
+        context,
+        message: 'Missing traveller document context. Please retry.',
+      );
       return;
     }
 
@@ -113,16 +127,20 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
     );
 
     if (result == null || result.files.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No file selected.')),
+      await AppDialogs.showInfo(
+        context,
+        title: 'No file selected',
+        message: 'Please select a file to upload.',
       );
       return;
     }
 
     final selected = result.files.first;
     if (selected.bytes == null || selected.bytes!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Selected file is empty.')),
+      await AppDialogs.showError(
+        context,
+        title: 'Invalid file',
+        message: 'Selected file is empty.',
       );
       return;
     }
@@ -135,7 +153,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
     try {
       await _documentsService.uploadDocument(
         groupId: contextData.groupId,
-        travellerId: contextData.travellerAuthUid,
+        travellerAuthUid: contextData.travellerAuthUid,
         documentType: documentType,
         file: selected,
       );
@@ -144,10 +162,9 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${TravellerDocumentType.label(documentType)} uploaded.'),
-        ),
+      await AppDialogs.showSuccess(
+        context,
+        message: '${TravellerDocumentType.label(documentType)} uploaded.',
       );
 
       await _loadDocumentsState();
@@ -159,8 +176,10 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
       setState(() {
         _errorMessage = error.message;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
+      await AppDialogs.showError(
+        context,
+        title: 'Upload failed',
+        message: error.message,
       );
     } catch (error) {
       print('Traveller docs: caught exception message=$error');
@@ -170,8 +189,10 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
       setState(() {
         _errorMessage = 'Upload failed. Please try again.';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload failed. Please try again.')),
+      await AppDialogs.showError(
+        context,
+        title: 'Upload failed',
+        message: 'Upload failed. Please try again.',
       );
     } finally {
       if (mounted) {
@@ -186,12 +207,16 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Traveller Documents')),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _errorMessage != null && _context == null
-                ? _buildLoadErrorState()
-                : _buildContent(),
+      body: AppLoadingOverlay(
+        isLoading: _isUploadingAny,
+        message: 'Uploading document...',
+        child: SafeArea(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null && _context == null
+                  ? _buildLoadErrorState()
+                  : _buildContent(),
+        ),
       ),
     );
   }
@@ -276,9 +301,13 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton(
-              onPressed: isUploading ? null : () => _pickAndUpload(documentType),
-              child: Text(isUploading ? 'Uploading...' : 'Upload'),
+            SizedBox(
+              width: 120,
+              child: AppPrimaryButton(
+                label: 'Upload',
+                isLoading: isUploading,
+                onPressed: isUploading ? null : () => _pickAndUpload(documentType),
+              ),
             ),
           ],
         ),

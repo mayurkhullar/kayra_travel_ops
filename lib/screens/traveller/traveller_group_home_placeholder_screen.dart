@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/traveller_auth_provider.dart';
+import '../../utils/app_dialogs.dart';
 
 class TravellerGroupHomePlaceholderScreen extends StatelessWidget {
   const TravellerGroupHomePlaceholderScreen({
@@ -46,18 +47,32 @@ class TravellerGroupHomePlaceholderScreen extends StatelessWidget {
                         onPressed: authProvider.isLoading
                             ? null
                             : () async {
+                                final shouldLogout =
+                                    await AppDialogs.showConfirmation(
+                                  context,
+                                  title: 'Logout',
+                                  message: 'Are you sure you want to logout?',
+                                  confirmText: 'Logout',
+                                  isDestructive: true,
+                                );
+                                if (!shouldLogout) {
+                                  return;
+                                }
                                 await authProvider.logout();
+                                if (!context.mounted) {
+                                  return;
+                                }
+                                if (authProvider.errorMessage != null) {
+                                  await AppDialogs.showError(
+                                    context,
+                                    title: 'Logout failed',
+                                    message: authProvider.errorMessage!,
+                                  );
+                                }
                               },
                         icon: const Icon(Icons.logout),
                         label: const Text('Logout'),
                       ),
-                      if (authProvider.errorMessage != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          authProvider.errorMessage!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ],
                     ],
                   ),
                 ),

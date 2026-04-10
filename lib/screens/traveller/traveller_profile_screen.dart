@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../models/traveller_profile.dart';
 import '../../providers/traveller_auth_provider.dart';
 import '../../services/traveller_profile_service.dart';
+import '../../utils/app_dialogs.dart';
+import '../../widgets/app_loading_overlay.dart';
+import '../../widgets/app_primary_button.dart';
 import 'traveller_documents_screen.dart';
 
 class TravellerProfileScreen extends StatefulWidget {
@@ -185,6 +188,11 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
 
     if (!isFormValid || hasDateValidationError) {
       setState(() {});
+      await AppDialogs.showError(
+        context,
+        title: 'Validation error',
+        message: 'Please review required fields before saving.',
+      );
       return;
     }
 
@@ -215,8 +223,9 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
         _isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile saved successfully.')),
+      await AppDialogs.showSuccess(
+        context,
+        message: 'Profile saved successfully.',
       );
     } on TravellerProfileException catch (error, stackTrace) {
       print('Traveller profile: caught exception message=${error.message}');
@@ -228,6 +237,11 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
         _errorMessage = error.message;
         _isSaving = false;
       });
+      await AppDialogs.showError(
+        context,
+        title: 'Save failed',
+        message: error.message,
+      );
     } catch (error, stackTrace) {
       print('Traveller profile: caught exception message=$error');
       print('Traveller profile: stack=${stackTrace.toString().split('\n').first}');
@@ -238,6 +252,11 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
         _errorMessage = 'Unable to save profile right now.';
         _isSaving = false;
       });
+      await AppDialogs.showError(
+        context,
+        title: 'Save failed',
+        message: 'Unable to save profile right now.',
+      );
     }
   }
 
@@ -250,8 +269,11 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
       appBar: AppBar(
         title: const Text('Traveller Profile'),
       ),
-      body: SafeArea(
-        child: _isLoading
+      body: AppLoadingOverlay(
+        isLoading: _isSaving,
+        message: 'Saving profile...',
+        child: SafeArea(
+          child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _errorMessage != null && _loadedProfile == null
                 ? _buildLoadErrorState()
@@ -300,11 +322,10 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
                                 ),
                               ],
                               const SizedBox(height: 20),
-                              ElevatedButton(
-                                onPressed: _isSaving ? null : _saveProfile,
-                                child: Text(
-                                  _isSaving ? 'Saving...' : 'Save Profile',
-                                ),
+                              AppPrimaryButton(
+                                label: 'Save Profile',
+                                isLoading: _isSaving,
+                                onPressed: _saveProfile,
                               ),
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
@@ -327,6 +348,18 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
                                 onPressed: _isSaving
                                     ? null
                                     : () async {
+                                        final shouldLogout =
+                                            await AppDialogs.showConfirmation(
+                                          context,
+                                          title: 'Logout',
+                                          message:
+                                              'Are you sure you want to logout?',
+                                          confirmText: 'Logout',
+                                          isDestructive: true,
+                                        );
+                                        if (!shouldLogout) {
+                                          return;
+                                        }
                                         await widget.authProvider.logout();
                                       },
                                 icon: const Icon(Icons.logout),
@@ -338,6 +371,7 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
                       ),
                     ),
                   ),
+        ),
       ),
     );
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/traveller_auth_provider.dart';
+import '../../utils/app_dialogs.dart';
+import '../../widgets/app_loading_overlay.dart';
+import '../../widgets/app_primary_button.dart';
 
 class TravellerFirstTimeSetupScreen extends StatefulWidget {
   const TravellerFirstTimeSetupScreen({
@@ -31,7 +34,16 @@ class _TravellerFirstTimeSetupScreenState
   }
 
   Future<void> _submit() async {
+    if (widget.authProvider.isLoading) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
+      await AppDialogs.showError(
+        context,
+        title: 'Validation error',
+        message: 'Please provide valid signup details.',
+      );
       return;
     }
 
@@ -46,9 +58,24 @@ class _TravellerFirstTimeSetupScreenState
     }
 
     if (widget.authProvider.isAuthenticated) {
-      print('Signup stage: navigation started destination=previous_screen');
+      await AppDialogs.showSuccess(
+        context,
+        title: 'Signup complete',
+        message: 'Your traveller account is ready.',
+      );
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop();
+      return;
     }
+
+    await AppDialogs.showError(
+      context,
+      title: 'Signup failed',
+      message:
+          widget.authProvider.errorMessage ?? 'Unable to complete signup now.',
+    );
   }
 
   @override
@@ -58,77 +85,69 @@ class _TravellerFirstTimeSetupScreenState
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(title: const Text('Traveller Sign up')),
-          body: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          controller: _mobileController,
-                          decoration: const InputDecoration(
-                            labelText: 'Mobile number',
+          body: AppLoadingOverlay(
+            isLoading: widget.authProvider.isLoading,
+            message: 'Creating your account...',
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextFormField(
+                            controller: _mobileController,
+                            decoration: const InputDecoration(
+                              labelText: 'Mobile number',
+                            ),
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter your mobile number';
+                              }
+                              return null;
+                            },
                           ),
-                          keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Enter your mobile number';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _passwordController,
-                          decoration: const InputDecoration(
-                            labelText: 'Create password',
-                          ),
-                          obscureText: true,
-                          validator: (value) {
-                            if (value == null || value.length < 6) {
-                              return 'Password must be at least 6 characters';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _confirmPasswordController,
-                          decoration: const InputDecoration(
-                            labelText: 'Confirm password',
-                          ),
-                          obscureText: true,
-                          validator: (value) {
-                            if (value != _passwordController.text) {
-                              return 'Passwords do not match';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: widget.authProvider.isLoading ? null : _submit,
-                          child: widget.authProvider.isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('Sign up'),
-                        ),
-                        if (widget.authProvider.errorMessage != null) ...[
                           const SizedBox(height: 12),
-                          Text(
-                            widget.authProvider.errorMessage!,
-                            style: const TextStyle(color: Colors.red),
+                          TextFormField(
+                            controller: _passwordController,
+                            decoration: const InputDecoration(
+                              labelText: 'Create password',
+                            ),
+                            obscureText: true,
+                            validator: (value) {
+                              if (value == null || value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            decoration: const InputDecoration(
+                              labelText: 'Confirm password',
+                            ),
+                            obscureText: true,
+                            validator: (value) {
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          AppPrimaryButton(
+                            label: 'Sign up',
+                            isLoading: widget.authProvider.isLoading,
+                            onPressed: _submit,
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),

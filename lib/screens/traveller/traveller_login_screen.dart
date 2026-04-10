@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/traveller_auth_provider.dart';
+import '../../utils/app_dialogs.dart';
+import '../../widgets/app_loading_overlay.dart';
+import '../../widgets/app_primary_button.dart';
 
 class TravellerLoginScreen extends StatefulWidget {
   const TravellerLoginScreen({super.key, required this.authProvider});
@@ -24,7 +27,16 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (widget.authProvider.isLoading) {
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
+      await AppDialogs.showError(
+        context,
+        title: 'Validation error',
+        message: 'Please provide mobile number and password.',
+      );
       return;
     }
 
@@ -38,9 +50,22 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
     }
 
     if (widget.authProvider.isAuthenticated) {
-      print('Traveller login: final navigation starting destination=previous_screen');
+      await AppDialogs.showSuccess(
+        context,
+        message: 'Login successful.',
+      );
+      if (!mounted) {
+        return;
+      }
       Navigator.of(context).pop();
+      return;
     }
+
+    await AppDialogs.showError(
+      context,
+      title: 'Login failed',
+      message: widget.authProvider.errorMessage ?? 'Unable to login right now.',
+    );
   }
 
   @override
@@ -50,61 +75,54 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
       builder: (context, _) {
         return Scaffold(
           appBar: AppBar(title: const Text('Traveller Login')),
-          body: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextFormField(
-                          controller: _mobileController,
-                          decoration: const InputDecoration(
-                            labelText: 'Mobile number',
+          body: AppLoadingOverlay(
+            isLoading: widget.authProvider.isLoading,
+            message: 'Logging in...',
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextFormField(
+                            controller: _mobileController,
+                            decoration: const InputDecoration(
+                              labelText: 'Mobile number',
+                            ),
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Enter your mobile number';
+                              }
+                              return null;
+                            },
                           ),
-                          keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Enter your mobile number';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _passwordController,
-                          decoration: const InputDecoration(labelText: 'Password'),
-                          obscureText: true,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Enter your password';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        ElevatedButton(
-                          onPressed: widget.authProvider.isLoading ? null : _submit,
-                          child: widget.authProvider.isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('Login'),
-                        ),
-                        if (widget.authProvider.errorMessage != null) ...[
                           const SizedBox(height: 12),
-                          Text(
-                            widget.authProvider.errorMessage!,
-                            style: const TextStyle(color: Colors.red),
+                          TextFormField(
+                            controller: _passwordController,
+                            decoration:
+                                const InputDecoration(labelText: 'Password'),
+                            obscureText: true,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Enter your password';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          AppPrimaryButton(
+                            label: 'Login',
+                            isLoading: widget.authProvider.isLoading,
+                            onPressed: _submit,
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
