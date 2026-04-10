@@ -22,6 +22,8 @@ class TravellerProfileScreen extends StatefulWidget {
 }
 
 class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
+  static const List<String> _allowedGenders = <String>['Male', 'Female'];
+
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -90,7 +92,8 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
         _passportCountryController.text = profile.passportIssuingCountry;
         _dateOfBirth = profile.dateOfBirth;
         _passportExpiryDate = profile.passportExpiryDate;
-        _gender = (profile.gender ?? '').trim().isEmpty ? null : profile.gender;
+        final savedGender = (profile.gender ?? '').trim();
+        _gender = _allowedGenders.contains(savedGender) ? savedGender : null;
         _isLoading = false;
       });
     } on TravellerProfileException catch (error) {
@@ -426,21 +429,23 @@ class _TravellerProfileScreenState extends State<TravellerProfileScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _gender,
+              initialValue: _gender,
               decoration: const InputDecoration(labelText: 'Gender'),
-              items: const [
-                DropdownMenuItem(value: 'female', child: Text('Female')),
-                DropdownMenuItem(value: 'male', child: Text('Male')),
-                DropdownMenuItem(value: 'other', child: Text('Other')),
-                DropdownMenuItem(
-                  value: 'prefer_not_to_say',
-                  child: Text('Prefer not to say'),
-                ),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem(value: 'Male', child: Text('Male')),
+                DropdownMenuItem(value: 'Female', child: Text('Female')),
               ],
               onChanged: (value) {
                 setState(() {
                   _gender = value;
                 });
+              },
+              validator: (value) {
+                if (!_allowedGenders.contains(value)) {
+                  print('Traveller profile: validation failure reason=gender invalid');
+                  return 'Gender is required.';
+                }
+                return null;
               },
             ),
             const SizedBox(height: 12),

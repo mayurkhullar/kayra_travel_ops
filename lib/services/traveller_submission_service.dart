@@ -34,6 +34,8 @@ class TravellerSubmissionSnapshot {
 }
 
 class TravellerSubmissionService {
+  static const List<String> _allowedGenders = <String>['Male', 'Female'];
+
   TravellerSubmissionService({
     FirebaseFirestore? firestore,
     TravellerProfileService? profileService,
@@ -84,7 +86,8 @@ class TravellerSubmissionService {
       if (profile.dateOfBirth == null) {
         missingItems.add('Date of birth');
       }
-      if ((profile.gender ?? '').trim().isEmpty) {
+      final normalizedGender = (profile.gender ?? '').trim();
+      if (!_allowedGenders.contains(normalizedGender)) {
         missingItems.add('Gender');
       }
       if (profile.passportNumber.trim().isEmpty) {

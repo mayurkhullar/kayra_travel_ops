@@ -297,7 +297,9 @@ class _TravellerReviewScreenState extends State<TravellerReviewScreen> {
           AppPrimaryButton(
             label: 'Submit for Review',
             isLoading: _isSubmitting,
-            onPressed: _isSubmitting ? null : _submitForReview,
+            onPressed: _isSubmitting || !snapshot.isComplete
+                ? null
+                : _submitForReview,
           ),
         ],
       ),

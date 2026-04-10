@@ -20,7 +20,7 @@ class AppLoadingOverlay extends StatelessWidget {
         if (isLoading)
           Positioned.fill(
             child: ColoredBox(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withValues(alpha: 0.35),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.all(16),

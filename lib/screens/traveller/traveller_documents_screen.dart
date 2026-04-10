@@ -128,6 +128,9 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
     );
 
     if (result == null || result.files.isEmpty) {
+      if (!mounted) {
+        return;
+      }
       await AppDialogs.showInfo(
         context,
         title: 'No file selected',
@@ -138,6 +141,9 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
 
     final selected = result.files.first;
     if (selected.bytes == null || selected.bytes!.isEmpty) {
+      if (!mounted) {
+        return;
+      }
       await AppDialogs.showError(
         context,
         title: 'Invalid file',
