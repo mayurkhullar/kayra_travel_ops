@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../providers/traveller_auth_provider.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/app_dialogs.dart';
 import '../../widgets/app_loading_overlay.dart';
 import '../../widgets/app_primary_button.dart';
@@ -18,6 +19,13 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _didLogUiEntry = false;
+
+  @override
+  void initState() {
+    super.initState();
+    appLog('TravellerLogin', 'traveller login screen opened');
+  }
 
   @override
   void dispose() {
@@ -27,11 +35,19 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
   }
 
   Future<void> _submit() async {
+    appLog('TravellerLogin', 'login button tapped');
     if (widget.authProvider.isLoading) {
+      appLog('TravellerLogin', 'login ignored because provider is already loading');
       return;
     }
 
-    if (!_formKey.currentState!.validate()) {
+    appLog('TravellerLogin', 'form validation started');
+    final isValid = _formKey.currentState!.validate();
+    appLog(
+      'TravellerLogin',
+      'form validation ${isValid ? 'passed' : 'failed'}',
+    );
+    if (!isValid) {
       await AppDialogs.showError(
         context,
         title: 'Validation error',
@@ -40,16 +56,22 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
       return;
     }
 
-    await widget.authProvider.login(
-      mobile: _mobileController.text,
-      password: _passwordController.text,
-    );
+    try {
+      await widget.authProvider.login(
+        mobile: _mobileController.text,
+        password: _passwordController.text,
+      );
+    } catch (error, stackTrace) {
+      appLogError('TravellerLogin', 'button handler', error, stackTrace);
+      rethrow;
+    }
 
     if (!mounted) {
       return;
     }
 
     if (widget.authProvider.isAuthenticated) {
+      appLog('TravellerLogin', 'navigation started');
       await AppDialogs.showSuccess(
         context,
         message: 'Login successful.',
@@ -70,6 +92,10 @@ class _TravellerLoginScreenState extends State<TravellerLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_didLogUiEntry) {
+      appLog('TravellerLogin', 'UI entry');
+      _didLogUiEntry = true;
+    }
     return AnimatedBuilder(
       animation: widget.authProvider,
       builder: (context, _) {

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -5,13 +8,39 @@ import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'screens/home/bootstrap_home_screen.dart';
 import 'screens/traveller/traveller_link_bootstrap_screen.dart';
+import 'utils/app_logger.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      FlutterError.onError = (FlutterErrorDetails details) {
+        appLog(
+          'GlobalError',
+          'FlutterError: ${details.exceptionAsString()}',
+        );
+        if (details.stack != null) {
+          appLog('GlobalError', 'FlutterError STACK: ${details.stack}');
+        }
+        FlutterError.presentError(details);
+      };
 
-  runApp(const MyApp());
+      PlatformDispatcher.instance.onError = (error, stack) {
+        appLogError('GlobalError', 'PlatformDispatcher.onError', error, stack);
+        return false;
+      };
+
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+
+      runApp(const MyApp());
+    },
+    (error, stackTrace) {
+      appLogError('GlobalError', 'runZonedGuarded', error, stackTrace);
+    },
+  );
 }
 
 class MyApp extends StatefulWidget {

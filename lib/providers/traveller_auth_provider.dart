@@ -9,6 +9,7 @@ import '../models/traveller_group_context.dart';
 import '../services/traveller_account_service.dart';
 import '../services/traveller_auth_service.dart';
 import '../services/traveller_identity_mapper.dart';
+import '../utils/app_logger.dart';
 
 class TravellerAuthProvider extends ChangeNotifier {
   TravellerAuthProvider({
@@ -45,8 +46,7 @@ class TravellerAuthProvider extends ChangeNotifier {
       _authSubscription ??= _authService.authStateChanges().listen(
         _onAuthStateChanged,
         onError: (error, stackTrace) {
-          print('Traveller auth state listener error: $error');
-          print('Traveller auth state listener stack: $stackTrace');
+          _logError('auth state listener', error, stackTrace);
           _setState(
             isLoading: false,
             errorMessage: 'Unable to restore traveller session.',
@@ -56,8 +56,7 @@ class TravellerAuthProvider extends ChangeNotifier {
     } on TravellerAccountException catch (error) {
       _setState(isLoading: false, errorMessage: error.message);
     } catch (error, stackTrace) {
-      print('Traveller link stage: unexpected exception $error');
-      print('Traveller link stage: stack $stackTrace');
+      _logError('navigation/bootstrap', error, stackTrace);
       _setState(
         isLoading: false,
         errorMessage: 'Unable to load traveller entry right now.',
@@ -174,19 +173,19 @@ class TravellerAuthProvider extends ChangeNotifier {
 
     try {
       _log('Login started');
-      _log('Raw phone input: $mobile');
+      _log('raw phone input: $mobile');
       final sanitizedPhone = sanitizeTravellerPhone(mobile);
-      _log('Sanitized phone: $sanitizedPhone');
+      _log('sanitized phone: $sanitizedPhone');
       if (sanitizedPhone.isEmpty) {
         throw const TravellerAccountException('Enter a valid mobile number.');
       }
 
       final authEmail = mapTravellerPhoneToAuthEmail(sanitizedPhone);
-      _log('Mapped auth email: $authEmail');
+      _log('mapped auth email: $authEmail');
 
-      _log('Firebase sign-in started');
+      UserCredential credential;
       try {
-        await _authService.signInTraveller(
+        credential = await _authService.signInTraveller(
           email: authEmail,
           password: password,
         );
@@ -195,32 +194,27 @@ class TravellerAuthProvider extends ChangeNotifier {
         rethrow;
       }
 
-      final uid = _authService.currentUser?.uid;
+      final uid = credential.user?.uid ?? _authService.currentUser?.uid;
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
-      _log('Firebase sign-in success: uid=$uid');
+      _log('Firebase sign-in success with uid=$uid');
 
-      _log('Loading traveller_accounts/$uid');
+      _log('traveller_accounts lookup started');
       final refreshed = await _loadTravellerAccount(uid);
       if (refreshed == null) {
         throw const TravellerAccountException(
           'Traveller account setup is missing. Please contact support.',
         );
       }
-      _log('traveller_accounts exists: true');
-      _log(
-        'traveller_accounts data: {id: ${refreshed.id}, isActive: ${refreshed.isActive}, groupIds: ${refreshed.groupIds}}',
-      );
+      _log('traveller_accounts lookup success');
+      _log('traveller_accounts data loaded');
 
       _validateActiveAccount(refreshed);
 
-      _log('Current group id: ${group.id}');
+      _log('current group id resolved: ${group.id}');
       _validateGroupMembership(account: refreshed, groupId: group.id);
 
-      _log(
-        'Querying travellers for accountId=$uid groupId=${group.id}',
-      );
       final travellerQuery = await _queryTravellerContext(
         uid: uid,
         groupId: group.id,
@@ -231,8 +225,9 @@ class TravellerAuthProvider extends ChangeNotifier {
           'No traveller record found for this group. Please contact support.',
         );
       }
+      _log('travellers record selected id=${travellerQuery.docs.first.id}');
 
-      _log('Navigation starting');
+      _log('navigation started');
       try {
         _setState(
           isLoading: false,
@@ -317,7 +312,6 @@ class TravellerAuthProvider extends ChangeNotifier {
   Future<TravellerAccount?> _loadTravellerAccount(String uid) async {
     try {
       final account = await _accountService.getTravellerByUid(uid);
-      _log('traveller_accounts exists: ${account != null}');
       return account;
     } catch (error, stackTrace) {
       _logError('traveller_accounts lookup failure', error, stackTrace);
@@ -338,7 +332,7 @@ class TravellerAuthProvider extends ChangeNotifier {
     required String groupId,
   }) {
     final isLinked = account.groupIds.contains(groupId);
-    _log('groupIds contains current group: $isLinked');
+    _log('group membership check result: $isLinked');
     if (!isLinked) {
       throw const TravellerAccountException(
         'This account is not linked to this group.',
@@ -362,12 +356,11 @@ class TravellerAuthProvider extends ChangeNotifier {
   }
 
   void _log(String message) {
-    print('[TravellerLogin] $message');
+    appLog('TravellerLogin', message);
   }
 
   void _logError(String stage, Object error, StackTrace stackTrace) {
-    print('[TravellerLogin] ERROR during $stage: $error');
-    print('[TravellerLogin] STACK: $stackTrace');
+    appLogError('TravellerLogin', stage, error, stackTrace);
   }
 
   void _setState({

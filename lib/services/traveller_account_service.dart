@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/traveller_account.dart';
 import '../models/traveller_group_context.dart';
 import 'traveller_identity_mapper.dart';
+import '../utils/app_logger.dart';
 
 class TravellerAccountService {
   TravellerAccountService({FirebaseFirestore? firestore})
@@ -131,13 +132,14 @@ class TravellerAccountService {
 
   Future<TravellerAccount?> getTravellerByUid(String uid) async {
     try {
-      print('traveller_accounts doc lookup started uid=$uid');
+      appLog('TravellerLogin', 'traveller_accounts lookup started uid=$uid');
       final doc = await _travellerAccounts.doc(uid).get();
       if (!doc.exists || doc.data() == null) {
-        print('traveller_accounts doc missing uid=$uid');
+        appLog('TravellerLogin', 'traveller_accounts lookup missing uid=$uid');
         return null;
       }
-      print('traveller_accounts doc found uid=$uid');
+      appLog('TravellerLogin', 'traveller_accounts lookup success uid=$uid');
+      appLog('TravellerLogin', 'traveller_accounts data loaded uid=$uid');
       return TravellerAccount.fromFirestore(doc.id, doc.data()!);
     } on FirebaseException catch (error, stackTrace) {
       _printFirestoreError(
@@ -154,6 +156,10 @@ class TravellerAccountService {
     required String groupId,
   }) async {
     try {
+      appLog(
+        'TravellerLogin',
+        'travellers query started accountId=$uid groupId=$groupId',
+      );
       return await _travellers
           .where('accountId', isEqualTo: uid)
           .where('groupId', isEqualTo: groupId)
@@ -186,7 +192,10 @@ class TravellerAccountService {
       );
     }
 
-    print('$stage: group membership valid groupId=$groupId uid=${account.id}');
+    appLog(
+      'TravellerLogin',
+      '$stage: group membership check result=true groupId=$groupId uid=${account.id}',
+    );
   }
 
   void _printFirestoreError({

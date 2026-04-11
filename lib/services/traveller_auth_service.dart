@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'traveller_web_auth_context.dart';
+import '../utils/app_logger.dart';
 
 class TravellerAuthService {
   TravellerAuthService({FirebaseAuth? firebaseAuth}) : _firebaseAuth = firebaseAuth;
@@ -53,13 +54,25 @@ class TravellerAuthService {
     await initialize();
 
     try {
+      appLog('TravellerLogin', 'Firebase sign-in started');
       return await _firebaseAuth!.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseAuthException catch (error, stackTrace) {
+      appLog(
+        'TravellerLogin',
+        'Firebase sign-in failure with FirebaseAuthException code=${error.code} message=${error.message}',
+      );
+      appLogError(
+        'TravellerLogin',
+        'auth service login',
+        error,
+        stackTrace,
+      );
       throw TravellerAuthException(_mapError(error));
-    } catch (_) {
+    } catch (error, stackTrace) {
+      appLogError('TravellerLogin', 'auth service login', error, stackTrace);
       throw const TravellerAuthException(
         'Unable to login right now. Please try again.',
       );
