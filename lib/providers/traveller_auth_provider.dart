@@ -170,70 +170,90 @@ class TravellerAuthProvider extends ChangeNotifier {
     _setState(isLoading: true, clearError: true);
 
     try {
-      print('Existing login stage: existing login started');
+      print('traveller login started');
       final sanitizedPhone = sanitizeTravellerPhone(mobile);
-      print('Existing login stage: phone sanitized phone=$sanitizedPhone');
       if (sanitizedPhone.isEmpty) {
         throw const TravellerAccountException('Enter a valid mobile number.');
       }
 
       final authEmail = mapTravellerPhoneToAuthEmail(sanitizedPhone);
-      print('Existing login stage: auth email generated email=$authEmail');
+      print('auth email generated email=$authEmail');
 
-      print('Existing login stage: Firebase Auth sign-in started');
-      final credential = await _authService.signInTraveller(
+      await _authService.signInTraveller(
         email: authEmail,
         password: password,
       );
-      final uid = credential.user?.uid;
+      final uid = _authService.currentUser?.uid;
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
-      print('Existing login stage: Firebase Auth sign-in success uid=$uid');
+      print('Firebase Auth sign-in success uid=$uid');
 
+      print('traveller_accounts direct lookup started');
       final refreshed = await _accountService.getTravellerByUid(uid);
       if (refreshed == null) {
+        print('traveller_accounts missing');
         throw const TravellerAccountException(
           'Traveller account is missing after login. Please contact support.',
         );
       }
+      print('traveller_accounts found');
 
-      try {
-        _accountService.validateAccountForGroup(
-          account: refreshed,
-          groupId: group.id,
-          stage: 'Existing login stage',
+      if (refreshed.isActive) {
+        print('traveller account active');
+      } else {
+        print('traveller account inactive');
+        throw const TravellerAccountException(
+          'This traveller account is inactive. Please contact support.',
         );
-        print('Existing login stage: group membership valid');
-      } on TravellerAccountException {
-        print('Existing login stage: group membership invalid');
-        rethrow;
       }
 
-      print('Existing login stage: navigation started');
+      print('current group id resolved groupId=${group.id}');
+      if (refreshed.groupIds.contains(group.id)) {
+        print('group membership valid');
+      } else {
+        print('group membership invalid');
+        throw const TravellerAccountException(
+          'This account is not linked to this group.',
+        );
+      }
+
+      print('travellers query started');
+      final travellerQuery = await _accountService.getTravellerRecordsForGroup(
+        uid: uid,
+        groupId: group.id,
+      );
+      print('travellers query result count=${travellerQuery.docs.length}');
+      if (travellerQuery.docs.isEmpty) {
+        throw const TravellerAccountException(
+          'No traveller record found for this group. Please contact support.',
+        );
+      }
+
+      print('navigation started');
       _setState(
         isLoading: false,
         currentTravellerAccount: refreshed,
         updateAccount: true,
       );
     } on TravellerAccountException catch (error, stackTrace) {
-      print('Existing login stage: caught exception message=${error.message}');
+      print('caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerAuthException catch (error, stackTrace) {
-      print('Existing login stage: caught exception message=${error.message}');
+      print('caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerIdentityMapperException catch (error, stackTrace) {
-      print('Existing login stage: caught exception message=${error.message}');
+      print('caught exception message=${error.message}');
       print('Existing login stage: stack $stackTrace');
       _setState(isLoading: false, errorMessage: error.message);
     } catch (error, stackTrace) {
-      print('Existing login stage: caught exception message=$error');
+      print('caught exception message=$error');
       print('Existing login stage: stack $stackTrace');
       _setState(
         isLoading: false,
-        errorMessage: 'Unable to login right now. Please try again.',
+        errorMessage: 'Traveller access loading error. Please try again.',
       );
     }
   }

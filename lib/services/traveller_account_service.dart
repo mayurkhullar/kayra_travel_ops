@@ -149,6 +149,26 @@ class TravellerAccountService {
     }
   }
 
+  Future<QuerySnapshot<Map<String, dynamic>>> getTravellerRecordsForGroup({
+    required String uid,
+    required String groupId,
+  }) async {
+    try {
+      return await _travellers
+          .where('accountId', isEqualTo: uid)
+          .where('groupId', isEqualTo: groupId)
+          .limit(1)
+          .get();
+    } on FirebaseException catch (error, stackTrace) {
+      _printFirestoreError(
+        stage: 'Traveller access traveller record lookup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      throw TravellerAccountException(_mapFirestoreError(error));
+    }
+  }
+
   void validateAccountForGroup({
     required TravellerAccount account,
     required String groupId,
@@ -162,7 +182,7 @@ class TravellerAccountService {
 
     if (!account.groupIds.contains(groupId)) {
       throw const TravellerAccountException(
-        'This account is not linked to this group yet.',
+        'This account is not linked to this group.',
       );
     }
 
