@@ -55,7 +55,7 @@ class _MyAppState extends State<MyApp> {
           ),
           useMaterial3: true,
         ),
-        home: TravellerLinkBootstrapScreen(groupCode: _travellerGroupCode!),
+        home: TravellerLinkBootstrapScreen(groupCode: _travellerGroupCode),
       );
     }
 
