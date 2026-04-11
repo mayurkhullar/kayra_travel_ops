@@ -15,6 +15,15 @@ class TravellerDocumentContext {
   final String groupType;
   final String travellerAuthUid;
 }
+class TravellerDocumentEditDecision {
+  const TravellerDocumentEditDecision({
+    required this.canEdit,
+    required this.reason,
+  });
+
+  final bool canEdit;
+  final String reason;
+}
 
 class TravellerDocumentsService {
   TravellerDocumentsService({
@@ -32,6 +41,83 @@ class TravellerDocumentsService {
       _firestore.collection('travellers');
   CollectionReference<Map<String, dynamic>> get _documents =>
       _firestore.collection('documents');
+
+  static const Set<String> _travellerEditableStatuses = <String>{
+    'draft',
+    'incomplete',
+    'rejected',
+  };
+
+  static const Set<String> _documentReuploadStatuses = <String>{
+    TravellerDocumentStatus.rejected,
+    TravellerDocumentStatus.reuploadRequired,
+  };
+
+  Future<String> loadTravellerStatus({
+    required String accountUid,
+    required String groupId,
+  }) async {
+    try {
+      final travellerQuery = await _travellers
+          .where('accountId', isEqualTo: accountUid)
+          .where('groupId', isEqualTo: groupId)
+          .get();
+
+      if (travellerQuery.docs.isEmpty) {
+        throw const TravellerDocumentsException(
+          'Traveller record not found for this group. Please contact support.',
+        );
+      }
+
+      final travellerDoc = _selectDeterministicTravellerDoc(travellerQuery.docs);
+      final rawStatus =
+          (travellerDoc.data()['status'] as String?)?.trim().toLowerCase();
+      final travellerStatus =
+          rawStatus == null || rawStatus.isEmpty ? 'draft' : rawStatus;
+      print('Traveller docs: current traveller status=$travellerStatus');
+      return travellerStatus;
+    } on FirebaseException catch (error, stackTrace) {
+      print('Traveller docs: caught exception message=${error.message ?? error.code}');
+      print('Traveller docs: stack=${stackTrace.toString().split('\n').first}');
+      throw TravellerDocumentsException(
+        error.message ?? 'Unable to load traveller status.',
+      );
+    }
+  }
+
+  TravellerDocumentEditDecision evaluateDocumentEditability({
+    required String travellerStatus,
+    required String documentType,
+    TravellerDocument? activeDocument,
+  }) {
+    final normalizedTravellerStatus = travellerStatus.trim().toLowerCase();
+    final activeStatus = activeDocument?.status.trim().toLowerCase();
+
+    final hasActiveDocument = activeDocument != null && activeDocument.isActive;
+    final hasNoActiveDocument = !hasActiveDocument;
+    final isTravellerEditable =
+        _travellerEditableStatuses.contains(normalizedTravellerStatus);
+    final isDocumentReuploadable =
+        activeStatus != null && _documentReuploadStatuses.contains(activeStatus);
+
+    final canEdit =
+        isTravellerEditable || hasNoActiveDocument || isDocumentReuploadable;
+
+    final reason = canEdit
+        ? 'Editable'
+        : 'Locked after submission. You can only re-upload if this document is rejected.';
+
+    print(
+      'Traveller docs: edit decision status=$normalizedTravellerStatus '
+      'type=$documentType activeStatus=${activeStatus ?? 'none'} '
+      'editable=$canEdit',
+    );
+
+    return TravellerDocumentEditDecision(
+      canEdit: canEdit,
+      reason: reason,
+    );
+  }
 
   Future<TravellerDocumentContext> resolveDocumentContext({
     required String accountUid,
@@ -127,9 +213,6 @@ class TravellerDocumentsService {
       );
     }
   }
-
-
-
   Future<Map<String, TravellerDocument>> loadLatestActiveDocumentsByType({
     required String groupId,
     required String travellerAuthUid,
@@ -164,6 +247,7 @@ class TravellerDocumentsService {
       );
     }
   }
+
   Future<void> uploadDocument({
     required String groupId,
     required String travellerAuthUid,
@@ -185,6 +269,11 @@ class TravellerDocumentsService {
     }
 
     try {
+      final travellerStatus = await loadTravellerStatus(
+        accountUid: travellerAuthUid,
+        groupId: groupId,
+      );
+
       final previousSnapshot = await _documents
           .where('groupId', isEqualTo: groupId)
           .where('travellerId', isEqualTo: travellerAuthUid)
@@ -198,6 +287,29 @@ class TravellerDocumentsService {
       final currentActiveDocs = existingDocs
           .where((doc) => doc.isActive)
           .toList();
+      final activeDocument = currentActiveDocs.isEmpty
+          ? null
+          : currentActiveDocs.reduce((a, b) => a.version >= b.version ? a : b);
+
+      final decision = evaluateDocumentEditability(
+        travellerStatus: travellerStatus,
+        documentType: documentType,
+        activeDocument: activeDocument,
+      );
+
+      if (!decision.canEdit) {
+        print(
+          'Traveller docs: upload blocked reason=${decision.reason} '
+          'status=$travellerStatus type=$documentType '
+          'activeStatus=${activeDocument?.status ?? 'none'}',
+        );
+        throw TravellerDocumentsException(decision.reason);
+      }
+
+      print(
+        'Traveller docs: upload allowed path status=$travellerStatus '
+        'type=$documentType activeStatus=${activeDocument?.status ?? 'none'}',
+      );
 
       final maxVersion = existingDocs.isEmpty
           ? 0

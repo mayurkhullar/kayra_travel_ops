@@ -28,6 +28,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
   List<String> _requiredDocumentTypes = const <String>[];
   Map<String, TravellerDocument> _latestDocuments =
       const <String, TravellerDocument>{};
+  String _travellerStatus = 'draft';
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -72,6 +73,10 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
         groupId: contextData.groupId,
         travellerAuthUid: contextData.travellerAuthUid,
       );
+      final travellerStatus = await _documentsService.loadTravellerStatus(
+        accountUid: contextData.travellerAuthUid,
+        groupId: contextData.groupId,
+      );
 
       if (!mounted) {
         return;
@@ -81,6 +86,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
         _context = contextData;
         _requiredDocumentTypes = required;
         _latestDocuments = latest;
+        _travellerStatus = travellerStatus;
         _isLoading = false;
       });
     } on TravellerDocumentsException catch (error) {
@@ -116,6 +122,30 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
       await AppDialogs.showError(
         context,
         message: 'Missing traveller document context. Please retry.',
+      );
+      return;
+    }
+
+    final currentDocument = _latestDocuments[documentType];
+    final editDecision = _documentsService.evaluateDocumentEditability(
+      travellerStatus: _travellerStatus,
+      documentType: documentType,
+      activeDocument: currentDocument,
+    );
+
+    if (!editDecision.canEdit) {
+      print(
+        'Traveller docs: upload blocked reason=${editDecision.reason} '
+        'status=$_travellerStatus type=$documentType '
+        'activeStatus=${currentDocument?.status ?? 'none'}',
+      );
+      if (!mounted) {
+        return;
+      }
+      await AppDialogs.showError(
+        context,
+        title: 'Upload locked',
+        message: editDecision.reason,
       );
       return;
     }
@@ -252,6 +282,7 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
                   const SizedBox(height: 8),
                   Text('Group ID: ${contextData.groupId}'),
                   Text('Traveller UID: ${contextData.travellerAuthUid}'),
+                  Text('Traveller status: ${_travellerStatus.replaceAll('_', ' ')}'),
                 ],
               ),
             ),
@@ -299,6 +330,11 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
     final document = _latestDocuments[documentType];
     final status = document?.status ?? TravellerDocumentStatus.notUploaded;
     final isUploading = _uploadingTypes.contains(documentType);
+    final editDecision = _documentsService.evaluateDocumentEditability(
+      travellerStatus: _travellerStatus,
+      documentType: documentType,
+      activeDocument: document,
+    );
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -316,6 +352,13 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text('Status: ${TravellerDocumentStatus.label(status)}'),
+                  if (!editDecision.canEdit) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      editDecision.reason,
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                  ],
                   if (document != null) ...[
                     const SizedBox(height: 2),
                     Text('Version: v${document.version}'),
@@ -327,9 +370,11 @@ class _TravellerDocumentsScreenState extends State<TravellerDocumentsScreen> {
             SizedBox(
               width: 120,
               child: AppPrimaryButton(
-                label: 'Upload',
+                label: document == null ? 'Upload' : 'Replace',
                 isLoading: isUploading,
-                onPressed: isUploading ? null : () => _pickAndUpload(documentType),
+                onPressed: isUploading || !editDecision.canEdit
+                    ? null
+                    : () => _pickAndUpload(documentType),
               ),
             ),
           ],
