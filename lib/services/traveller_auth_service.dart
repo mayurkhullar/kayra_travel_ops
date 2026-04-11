@@ -1,21 +1,36 @@
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'traveller_web_auth_context.dart';
+
 class TravellerAuthService {
-  TravellerAuthService({FirebaseAuth? firebaseAuth})
-      : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance;
+  TravellerAuthService({FirebaseAuth? firebaseAuth}) : _firebaseAuth = firebaseAuth;
 
-  final FirebaseAuth _firebaseAuth;
+  FirebaseAuth? _firebaseAuth;
 
-  Stream<User?> authStateChanges() => _firebaseAuth.authStateChanges();
+  Future<void> initialize() async {
+    _firebaseAuth ??= await resolveTravellerAuthInstance();
+  }
 
-  User? get currentUser => _firebaseAuth.currentUser;
+  Stream<User?> authStateChanges() {
+    final auth = _firebaseAuth;
+    if (auth == null) {
+      throw const TravellerAuthException(
+        'Traveller auth is not initialized. Please try again.',
+      );
+    }
+    return auth.authStateChanges();
+  }
+
+  User? get currentUser => _firebaseAuth?.currentUser;
 
   Future<UserCredential> createTravellerCredential({
     required String email,
     required String password,
   }) async {
+    await initialize();
+
     try {
-      return await _firebaseAuth.createUserWithEmailAndPassword(
+      return await _firebaseAuth!.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -35,8 +50,10 @@ class TravellerAuthService {
     required String email,
     required String password,
   }) async {
+    await initialize();
+
     try {
-      return await _firebaseAuth.signInWithEmailAndPassword(
+      return await _firebaseAuth!.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -50,8 +67,10 @@ class TravellerAuthService {
   }
 
   Future<void> signOut() async {
+    await initialize();
+
     try {
-      await _firebaseAuth.signOut();
+      await _firebaseAuth!.signOut();
     } on FirebaseAuthException catch (error) {
       throw TravellerAuthException(_mapError(error));
     } catch (_) {

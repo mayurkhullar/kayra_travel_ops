@@ -22,26 +22,45 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late final AuthProvider _authProvider;
+  AuthProvider? _authProvider;
+  late final String? _travellerGroupCode;
 
   @override
   void initState() {
     super.initState();
-    _authProvider = AuthProvider()..initialize();
+    _travellerGroupCode = _extractTravellerGroupCode(Uri.base);
+
+    if (_travellerGroupCode == null) {
+      _authProvider = AuthProvider()..initialize();
+    }
   }
 
   @override
   void dispose() {
-    _authProvider.dispose();
+    _authProvider?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final travellerGroupCode = _extractTravellerGroupCode(Uri.base);
+    if (_travellerGroupCode != null) {
+      return MaterialApp(
+        title: 'Kayra Travel Ops',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF102A43),
+            primary: const Color(0xFF102A43),
+            secondary: const Color(0xFFF0B429),
+          ),
+          useMaterial3: true,
+        ),
+        home: TravellerLinkBootstrapScreen(groupCode: _travellerGroupCode!),
+      );
+    }
 
     return AnimatedBuilder(
-      animation: _authProvider,
+      animation: _authProvider!,
       builder: (context, _) {
         return MaterialApp(
           title: 'Kayra Travel Ops',
@@ -54,9 +73,7 @@ class _MyAppState extends State<MyApp> {
             ),
             useMaterial3: true,
           ),
-          home: travellerGroupCode != null
-              ? TravellerLinkBootstrapScreen(groupCode: travellerGroupCode)
-              : BootstrapHomeScreen(authProvider: _authProvider),
+          home: BootstrapHomeScreen(authProvider: _authProvider!),
         );
       },
     );

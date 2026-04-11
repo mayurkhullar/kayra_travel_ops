@@ -37,6 +37,7 @@ class TravellerAuthProvider extends ChangeNotifier {
 
     try {
       final group = await _accountService.resolveGroupByCode(routeGroupCode);
+      await _authService.initialize();
       _setState(isLoading: false, currentGroup: group, updateGroup: true);
 
       _authSubscription ??= _authService.authStateChanges().listen(
