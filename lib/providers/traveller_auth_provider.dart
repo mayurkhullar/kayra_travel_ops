@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -24,6 +25,7 @@ class TravellerAuthProvider extends ChangeNotifier {
   TravellerAccount? _currentTravellerAccount;
   TravellerGroupContext? _currentGroup;
   bool _isLoading = false;
+  bool _isLoginBootstrapInProgress = false;
   String? _errorMessage;
 
   TravellerAccount? get currentTravellerAccount => _currentTravellerAccount;
@@ -168,93 +170,96 @@ class TravellerAuthProvider extends ChangeNotifier {
     }
 
     _setState(isLoading: true, clearError: true);
+    _isLoginBootstrapInProgress = true;
 
     try {
-      print('traveller login started');
+      _log('Login started');
+      _log('Raw phone input: $mobile');
       final sanitizedPhone = sanitizeTravellerPhone(mobile);
+      _log('Sanitized phone: $sanitizedPhone');
       if (sanitizedPhone.isEmpty) {
         throw const TravellerAccountException('Enter a valid mobile number.');
       }
 
       final authEmail = mapTravellerPhoneToAuthEmail(sanitizedPhone);
-      print('auth email generated email=$authEmail');
+      _log('Mapped auth email: $authEmail');
 
-      await _authService.signInTraveller(
-        email: authEmail,
-        password: password,
-      );
+      _log('Firebase sign-in started');
+      try {
+        await _authService.signInTraveller(
+          email: authEmail,
+          password: password,
+        );
+      } catch (error, stackTrace) {
+        _logError('sign-in failure', error, stackTrace);
+        rethrow;
+      }
+
       final uid = _authService.currentUser?.uid;
       if (uid == null) {
         throw const TravellerAuthException('Could not resolve auth identity.');
       }
-      print('Firebase Auth sign-in success uid=$uid');
+      _log('Firebase sign-in success: uid=$uid');
 
-      print('traveller_accounts direct lookup started');
-      final refreshed = await _accountService.getTravellerByUid(uid);
+      _log('Loading traveller_accounts/$uid');
+      final refreshed = await _loadTravellerAccount(uid);
       if (refreshed == null) {
-        print('traveller_accounts missing');
         throw const TravellerAccountException(
-          'Traveller account is missing after login. Please contact support.',
+          'Traveller account setup is missing. Please contact support.',
         );
       }
-      print('traveller_accounts found');
+      _log('traveller_accounts exists: true');
+      _log(
+        'traveller_accounts data: {id: ${refreshed.id}, isActive: ${refreshed.isActive}, groupIds: ${refreshed.groupIds}}',
+      );
 
-      if (refreshed.isActive) {
-        print('traveller account active');
-      } else {
-        print('traveller account inactive');
-        throw const TravellerAccountException(
-          'This traveller account is inactive. Please contact support.',
-        );
-      }
+      _validateActiveAccount(refreshed);
 
-      print('current group id resolved groupId=${group.id}');
-      if (refreshed.groupIds.contains(group.id)) {
-        print('group membership valid');
-      } else {
-        print('group membership invalid');
-        throw const TravellerAccountException(
-          'This account is not linked to this group.',
-        );
-      }
+      _log('Current group id: ${group.id}');
+      _validateGroupMembership(account: refreshed, groupId: group.id);
 
-      print('travellers query started');
-      final travellerQuery = await _accountService.getTravellerRecordsForGroup(
+      _log(
+        'Querying travellers for accountId=$uid groupId=${group.id}',
+      );
+      final travellerQuery = await _queryTravellerContext(
         uid: uid,
         groupId: group.id,
       );
-      print('travellers query result count=${travellerQuery.docs.length}');
+      _log('travellers query result count: ${travellerQuery.docs.length}');
       if (travellerQuery.docs.isEmpty) {
         throw const TravellerAccountException(
           'No traveller record found for this group. Please contact support.',
         );
       }
 
-      print('navigation started');
-      _setState(
-        isLoading: false,
-        currentTravellerAccount: refreshed,
-        updateAccount: true,
-      );
+      _log('Navigation starting');
+      try {
+        _setState(
+          isLoading: false,
+          currentTravellerAccount: refreshed,
+          updateAccount: true,
+        );
+      } catch (error, stackTrace) {
+        _logError('navigation failure', error, stackTrace);
+        rethrow;
+      }
     } on TravellerAccountException catch (error, stackTrace) {
-      print('caught exception message=${error.message}');
-      print('Existing login stage: stack $stackTrace');
+      _logError('group membership validation failure', error, stackTrace);
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerAuthException catch (error, stackTrace) {
-      print('caught exception message=${error.message}');
-      print('Existing login stage: stack $stackTrace');
+      _logError('sign-in failure', error, stackTrace);
       _setState(isLoading: false, errorMessage: error.message);
     } on TravellerIdentityMapperException catch (error, stackTrace) {
-      print('caught exception message=${error.message}');
-      print('Existing login stage: stack $stackTrace');
+      _logError('sign-in failure', error, stackTrace);
       _setState(isLoading: false, errorMessage: error.message);
     } catch (error, stackTrace) {
-      print('caught exception message=$error');
-      print('Existing login stage: stack $stackTrace');
+      _logError('traveller access loading failure', error, stackTrace);
       _setState(
         isLoading: false,
-        errorMessage: 'Traveller access loading error. Please try again.',
+        errorMessage: 'Traveller access loading failed. Please try again.',
       );
+    } finally {
+      _isLoginBootstrapInProgress = false;
     }
   }
 
@@ -273,6 +278,11 @@ class TravellerAuthProvider extends ChangeNotifier {
   }
 
   Future<void> _onAuthStateChanged(User? firebaseUser) async {
+    if (_isLoginBootstrapInProgress) {
+      _log('Auth-state listener ignored during login bootstrap');
+      return;
+    }
+
     if (firebaseUser == null) {
       _setState(currentTravellerAccount: null, updateAccount: true);
       return;
@@ -302,6 +312,62 @@ class TravellerAuthProvider extends ChangeNotifier {
       await _authService.signOut();
       _setState(errorMessage: error.message);
     }
+  }
+
+  Future<TravellerAccount?> _loadTravellerAccount(String uid) async {
+    try {
+      final account = await _accountService.getTravellerByUid(uid);
+      _log('traveller_accounts exists: ${account != null}');
+      return account;
+    } catch (error, stackTrace) {
+      _logError('traveller_accounts lookup failure', error, stackTrace);
+      rethrow;
+    }
+  }
+
+  void _validateActiveAccount(TravellerAccount account) {
+    if (!account.isActive) {
+      throw const TravellerAccountException(
+        'This traveller account is inactive. Please contact support.',
+      );
+    }
+  }
+
+  void _validateGroupMembership({
+    required TravellerAccount account,
+    required String groupId,
+  }) {
+    final isLinked = account.groupIds.contains(groupId);
+    _log('groupIds contains current group: $isLinked');
+    if (!isLinked) {
+      throw const TravellerAccountException(
+        'This account is not linked to this group.',
+      );
+    }
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _queryTravellerContext({
+    required String uid,
+    required String groupId,
+  }) async {
+    try {
+      return await _accountService.getTravellerRecordsForGroup(
+        uid: uid,
+        groupId: groupId,
+      );
+    } catch (error, stackTrace) {
+      _logError('travellers query failure', error, stackTrace);
+      rethrow;
+    }
+  }
+
+  void _log(String message) {
+    print('[TravellerLogin] $message');
+  }
+
+  void _logError(String stage, Object error, StackTrace stackTrace) {
+    print('[TravellerLogin] ERROR during $stage: $error');
+    print('[TravellerLogin] STACK: $stackTrace');
   }
 
   void _setState({

@@ -82,7 +82,7 @@ class TravellerAuthService {
     switch (error.code) {
       case 'wrong-password':
       case 'invalid-credential':
-        return 'Wrong mobile number or password.';
+        return 'Invalid login credentials. Please check your mobile number and password.';
       case 'user-not-found':
         return 'No account found for this mobile number. Please sign up first.';
       case 'email-already-in-use':

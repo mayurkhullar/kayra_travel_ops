@@ -214,7 +214,7 @@ class TravellerAccountService {
   String _mapFirestoreError(FirebaseException error) {
     switch (error.code) {
       case 'permission-denied':
-        return 'Permission denied while loading traveller access.';
+        return 'Traveller access loading failed due to permissions.';
       case 'unavailable':
         return 'Network error while loading traveller data.';
       default:
